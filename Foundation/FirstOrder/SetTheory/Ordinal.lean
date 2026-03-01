@@ -307,6 +307,277 @@ lemma empty_mem_iff_nonempty [IsOrdinal α] : ∅ ∈ α ↔ IsNonempty α := by
   · simp only [h, true_iff]
     exact ⟨∅, h⟩
 
+lemma not_exists_set_of_all_ordinals : ¬ ∃ X : V, ∀ α : V, α ∈ X ↔ IsOrdinal α := by
+  rintro ⟨X, hX⟩
+  let Ω : V := ⋃ˢ X
+  have hΩord : IsOrdinal Ω := IsOrdinal.sUnion fun α hαX ↦ (hX α).1 hαX
+  have hsuccΩX : succ Ω ∈ X := (hX (succ Ω)).2 (IsOrdinal.succ (α := Ω))
+  have hsuccΩsub : succ Ω ⊆ Ω := by
+    simpa [Ω] using subset_sUnion_of_mem hsuccΩX
+  have hΩΩ : Ω ∈ Ω := hsuccΩsub Ω (by simp)
+  exact (mem_irrefl Ω) hΩΩ
+
+lemma not_exists_set_containing_all_ordinals : ¬ ∃ X : V, ∀ α : V, IsOrdinal α → α ∈ X := by
+  rintro ⟨X, hX⟩
+  let O : V := {α ∈ X ; IsOrdinal α}
+  have hO : ∀ α : V, α ∈ O ↔ IsOrdinal α := by
+    intro α
+    constructor
+    · intro hαO
+      exact (mem_sep_iff.mp hαO).2
+    · intro hαord
+      exact mem_sep_iff.mpr ⟨hX α hαord, hαord⟩
+  exact not_exists_set_of_all_ordinals ⟨O, hO⟩
+
+lemma not_injective_functionLike_relation_to_set
+    [V ⊧ₘ* 𝗭𝗙]
+    (X : V)
+    (R : V → V → Prop)
+    (hR : ℒₛₑₜ-relation[V] R)
+    (hRfun : ∀ α : V, IsOrdinal α → ∃! y : V, y ∈ X ∧ R α y) :
+    ¬ (∀ α β y : V, IsOrdinal α → IsOrdinal β → R α y → R β y → α = β) := by
+  intro hRinj
+  let S : V → V → Prop := fun y α ↦
+    (∃ β : V, IsOrdinal β ∧ R β y ∧ α = β) ∨
+    ((¬∃ β : V, IsOrdinal β ∧ R β y) ∧ α = ∅)
+  have hS : ℒₛₑₜ-relation[V] S := by
+    letI : ℒₛₑₜ-relation[V] R := hR
+    change ℒₛₑₜ-relation[V] (fun y α ↦
+      (∃ β : V, IsOrdinal β ∧ R β y ∧ α = β) ∨
+      ((¬∃ β : V, IsOrdinal β ∧ R β y) ∧ α = ∅))
+    definability
+  have hSfun : ∀ y : V, y ∈ X → ∃! α : V, S y α := by
+    intro y hyX
+    by_cases hy : ∃ β : V, IsOrdinal β ∧ R β y
+    · rcases hy with ⟨β, hβord, hβy⟩
+      refine ⟨β, Or.inl ⟨β, hβord, hβy, rfl⟩, ?_⟩
+      intro α hα
+      rcases hα with (hα | hα)
+      · rcases hα with ⟨β₁, hβ₁ord, hβ₁y, rfl⟩
+        exact hRinj α β y hβ₁ord hβord hβ₁y hβy
+      · exact (hα.1 ⟨β, hβord, hβy⟩).elim
+    · refine ⟨∅, Or.inr ⟨hy, rfl⟩, ?_⟩
+      intro α hα
+      rcases hα with (hα | hα)
+      · rcases hα with ⟨β, hβord, hβy, -⟩
+        exact (hy ⟨β, hβord, hβy⟩).elim
+      · exact hα.2
+  rcases replacement_exists_on (X := X) S hS hSfun with ⟨Y, hY⟩
+  have hall : ∀ α : V, IsOrdinal α → α ∈ Y := by
+    intro α hαord
+    rcases (hRfun α hαord).exists with ⟨y, hyX, hαy⟩
+    exact (hY α).2 ⟨y, hyX, Or.inl ⟨α, hαord, hαy, rfl⟩⟩
+  exact not_exists_set_containing_all_ordinals ⟨Y, hall⟩
+
+noncomputable def memRelOn (X : V) : V :=
+  {p ∈ X ×ˢ X ; ∃ x ∈ X, ∃ y ∈ X, p = ⟨x, y⟩ₖ ∧ x ∈ y}
+
+def memRelOn.dfn : Semisentence ℒₛₑₜ 2 :=
+  f“R X. ∀ p, p ∈ R ↔ p ∈ !prod.dfn X X ∧ ∃ x ∈ X, ∃ y ∈ X, p = !kpair.dfn x y ∧ x ∈ y”
+
+instance memRelOn.defined : ℒₛₑₜ-function₁[V] memRelOn via memRelOn.dfn :=
+  ⟨fun v ↦ by rw [mem_ext_iff]; simp [memRelOn.dfn, memRelOn, mem_sep_iff]⟩
+
+instance memRelOn.definable : ℒₛₑₜ-function₁[V] memRelOn := memRelOn.defined.to_definable
+
+lemma memRelOn_subset_prod (X : V) : memRelOn X ⊆ X ×ˢ X := by
+  intro p hp
+  exact (mem_sep_iff.mp hp).1
+
+@[simp] lemma kpair_mem_memRelOn_iff {X x y : V} :
+    ⟨x, y⟩ₖ ∈ memRelOn X ↔ x ∈ X ∧ y ∈ X ∧ x ∈ y := by
+  constructor
+  · intro hxy
+    have hxy' : ⟨x, y⟩ₖ ∈ X ×ˢ X := (mem_sep_iff.mp hxy).1
+    have hX : x ∈ X ∧ y ∈ X := by simpa [mem_prod_iff] using hxy'
+    have : ∃ x' ∈ X, ∃ y' ∈ X, ⟨x, y⟩ₖ = ⟨x', y'⟩ₖ ∧ x' ∈ y' := (mem_sep_iff.mp hxy).2
+    rcases this with ⟨x', hx'X, y', hy'X, hEq, hx'y'⟩
+    rcases kpair_inj hEq.symm with ⟨rfl, rfl⟩
+    exact ⟨hX.1, hX.2, hx'y'⟩
+  · rintro ⟨hxX, hyX, hxy⟩
+    refine mem_sep_iff.mpr ?_
+    refine ⟨by simpa [mem_prod_iff] using And.intro hxX hyX, x, hxX, y, hyX, rfl, hxy⟩
+
+lemma strictLinearOrderOn_memRelOn [hα : IsOrdinal α] :
+    IsStrictLinearOrderOn (memRelOn α) α := by
+  refine ⟨memRelOn_subset_prod α, ?_, ?_, ?_⟩
+  · intro x hx hxx
+    exact (mem_irrefl x) ((kpair_mem_memRelOn_iff.mp hxx).2.2)
+  · intro x hx y hy z hz hxy hyz
+    have hxy' : x ∈ y := (kpair_mem_memRelOn_iff.mp hxy).2.2
+    have hyz' : y ∈ z := (kpair_mem_memRelOn_iff.mp hyz).2.2
+    have hzord : IsOrdinal z := hα.of_mem hz
+    exact kpair_mem_memRelOn_iff.mpr ⟨hx, hz, hzord.toIsTransitive.transitive _ hyz' _ hxy'⟩
+  · intro x hx y hy
+    rcases hα.trichotomy x hx y hy with (hxy | hEq | hyx)
+    · exact Or.inl <| kpair_mem_memRelOn_iff.mpr ⟨hx, hy, hxy⟩
+    · exact Or.inr (Or.inl hEq)
+    · exact Or.inr (Or.inr <| kpair_mem_memRelOn_iff.mpr ⟨hy, hx, hyx⟩)
+
+lemma wellOrderOn_memRelOn [hα : IsOrdinal α] :
+    IsWellOrderOn (memRelOn α) α := by
+  refine ⟨strictLinearOrderOn_memRelOn (α := α), ?_⟩
+  intro A hAX hAne
+  have hANonempty : IsNonempty A := ne_empty_iff_isNonempty.mp hAne
+  have hMin : ∃ m ∈ A, ∀ a ∈ A, a ∉ m := by simpa using foundation A
+  rcases hMin with ⟨m, hmA, hmLeast⟩
+  refine ⟨m, hmA, ?_⟩
+  intro a haA
+  have hmα : m ∈ α := hAX _ hmA
+  have haα : a ∈ α := hAX _ haA
+  rcases hα.trichotomy a haα m hmα with (ham | hEq | hma)
+  · exact (hmLeast a haA ham).elim
+  · exact Or.inl hEq
+  · exact Or.inr <| kpair_mem_memRelOn_iff.mpr ⟨hmα, haα, hma⟩
+
+lemma initialSegment_memRelOn_eq [hα : IsOrdinal α] {β : V} (hβα : β ∈ α) :
+    initialSegment (memRelOn α) α β = β := by
+  ext x
+  constructor
+  · intro hx
+    have hxb : ⟨x, β⟩ₖ ∈ memRelOn α := (mem_initialSegment_iff.mp hx).2
+    exact (kpair_mem_memRelOn_iff.mp hxb).2.2
+  · intro hxb
+    have hxα : x ∈ α := hα.toIsTransitive.transitive _ hβα _ hxb
+    exact mem_initialSegment_iff.mpr ⟨hxα, kpair_mem_memRelOn_iff.mpr ⟨hxα, hβα, hxb⟩⟩
+
+@[simp] lemma initialSegment_memRelOn_succ_eq [hα : IsOrdinal α] :
+    initialSegment (memRelOn (succ α)) (succ α) α = α :=
+  initialSegment_memRelOn_eq (α := succ α) (by simp)
+
+lemma kpair_mem_initSegIsoRel_memRelOn_of_isOrderIso
+    {S Y Λ α y f : V} [hΛ : IsOrdinal Λ]
+    (hαΛ : α ∈ Λ) (hyY : y ∈ Y)
+    (hIso : IsOrderIso (memRelOn α) α S (initialSegment S Y y) f) :
+    ⟨α, y⟩ₖ ∈ initSegIsoRel (memRelOn Λ) Λ S Y := by
+  have hIsoLift : IsOrderIso (memRelOn Λ) α S (initialSegment S Y y) f := by
+    refine ⟨IsOrderIso.mem_function hIso, IsOrderIso.injective hIso, IsOrderIso.range_eq hIso, ?_⟩
+    intro x₁ hx₁ x₂ hx₂
+    have hx₁Λ : x₁ ∈ Λ := hΛ.toIsTransitive.transitive _ hαΛ _ hx₁
+    have hx₂Λ : x₂ ∈ Λ := hΛ.toIsTransitive.transitive _ hαΛ _ hx₂
+    have hmemΛ : ⟨x₁, x₂⟩ₖ ∈ memRelOn Λ ↔ x₁ ∈ x₂ := by
+      constructor
+      · intro h
+        exact (kpair_mem_memRelOn_iff.mp h).2.2
+      · intro h
+        exact kpair_mem_memRelOn_iff.mpr ⟨hx₁Λ, hx₂Λ, h⟩
+    have hmemα : ⟨x₁, x₂⟩ₖ ∈ memRelOn α ↔ x₁ ∈ x₂ := by
+      constructor
+      · intro h
+        exact (kpair_mem_memRelOn_iff.mp h).2.2
+      · intro h
+        exact kpair_mem_memRelOn_iff.mpr ⟨hx₁, hx₂, h⟩
+    calc
+      ⟨x₁, x₂⟩ₖ ∈ memRelOn Λ ↔ x₁ ∈ x₂ := hmemΛ
+      _ ↔ ⟨x₁, x₂⟩ₖ ∈ memRelOn α := hmemα.symm
+      _ ↔ ⟨f ‘ x₁, f ‘ x₂⟩ₖ ∈ S := IsOrderIso.rel_iff hIso hx₁ hx₂
+  have hIsoSeg :
+      IsOrderIso (memRelOn Λ) (initialSegment (memRelOn Λ) Λ α) S (initialSegment S Y y) f := by
+    simpa [initialSegment_memRelOn_eq (α := Λ) hαΛ] using hIsoLift
+  exact kpair_mem_initSegIsoRel_iff.mpr ⟨hαΛ, hyY, ⟨f, hIsoSeg⟩⟩
+
+lemma exists_ordinal_isOrderIso_of_wellOrderOn
+    [V ⊧ₘ* 𝗭𝗙] {S Y : V} (hSwo : IsWellOrderOn S Y) :
+    ∃ α : V, IsOrdinal α ∧ ∃ f : V, IsOrderIso (memRelOn α) α S Y f := by
+  let Rm : V → V → Prop := fun α y ↦
+    y ∈ Y ∧ ∃ f : V, IsOrderIso (memRelOn α) α S (initialSegment S Y y) f
+  have hRmdef : ℒₛₑₜ-relation[V] Rm := by
+    letI : ℒₛₑₜ-function₁[V] memRelOn := memRelOn.definable
+    letI : ℒₛₑₜ-function₃[V] initialSegment := initialSegment.definable
+    letI : ℒₛₑₜ-relation₅[V] IsOrderIso := IsOrderIso.definable
+    unfold Rm
+    definability
+  have hNotAllMapped :
+      ¬ ∀ α : V, IsOrdinal α → ∃ y ∈ Y, Rm α y := by
+    intro hAll
+    have hRmfun : ∀ α : V, IsOrdinal α → ∃! y : V, y ∈ Y ∧ Rm α y := by
+      intro α hαord
+      rcases hAll α hαord with ⟨y, hyY, hyRm⟩
+      refine ⟨y, ⟨hyY, hyRm⟩, ?_⟩
+      intro y' hy'
+      have hy'Y : y' ∈ Y := hy'.1
+      rcases hyRm.2 with ⟨f, hf⟩
+      rcases hy'.2.2 with ⟨f', hf'⟩
+      have hab : ⟨α, y⟩ₖ ∈ initSegIsoRel (memRelOn (succ α)) (succ α) S Y :=
+        kpair_mem_initSegIsoRel_memRelOn_of_isOrderIso
+          (S := S) (Y := Y) (Λ := succ α) (α := α) (y := y) (f := f)
+          (by simp) hyY hf
+      have hab' : ⟨α, y'⟩ₖ ∈ initSegIsoRel (memRelOn (succ α)) (succ α) S Y :=
+        kpair_mem_initSegIsoRel_memRelOn_of_isOrderIso
+          (S := S) (Y := Y) (Λ := succ α) (α := α) (y := y') (f := f')
+          (by simp) hy'Y hf'
+      have hEq : y = y' := initSegIsoRel_value_unique
+        (hRwo := wellOrderOn_memRelOn (α := succ α))
+        (hSwo := hSwo) hab hab'
+      simp [hEq]
+    have hRminj :
+        ∀ α β y : V, IsOrdinal α → IsOrdinal β → Rm α y → Rm β y → α = β := by
+      intro α β y hαord hβord hαy hβy
+      have hyY : y ∈ Y := hαy.1
+      rcases hαy.2 with ⟨fα, hfα⟩
+      rcases hβy.2 with ⟨fβ, hfβ⟩
+      let Λ : V := succ (α ∪ β)
+      have hαuβord : IsOrdinal (α ∪ β) := by
+        rcases IsOrdinal.subset_or_supset (α := α) (β := β) with (hαβ | hβα)
+        · have : α ∪ β = β := union_eq_iff_left.mpr hαβ
+          simpa [this]
+        · have : α ∪ β = α := union_eq_iff_right.mpr hβα
+          simpa [this]
+      have hαΛord : IsOrdinal Λ := IsOrdinal.succ (α := α ∪ β)
+      have hαΛ : α ∈ Λ := by
+        have hαsub : α ⊆ α ∪ β := subset_union_left α β
+        rcases (IsOrdinal.subset_iff (α := α) (β := α ∪ β)).1 hαsub with (hEq | hMem)
+        · rw [mem_succ_iff]; exact Or.inl hEq
+        · rw [mem_succ_iff]; exact Or.inr hMem
+      have hβΛ : β ∈ Λ := by
+        have hβsub : β ⊆ α ∪ β := subset_union_right α β
+        rcases (IsOrdinal.subset_iff (α := β) (β := α ∪ β)).1 hβsub with (hEq | hMem)
+        · rw [mem_succ_iff]; exact Or.inl hEq
+        · rw [mem_succ_iff]; exact Or.inr hMem
+      have hαpair : ⟨α, y⟩ₖ ∈ initSegIsoRel (memRelOn Λ) Λ S Y :=
+        kpair_mem_initSegIsoRel_memRelOn_of_isOrderIso
+          (S := S) (Y := Y) (Λ := Λ) (α := α) (y := y) (f := fα) hαΛ hyY hfα
+      have hβpair : ⟨β, y⟩ₖ ∈ initSegIsoRel (memRelOn Λ) Λ S Y :=
+        kpair_mem_initSegIsoRel_memRelOn_of_isOrderIso
+          (S := S) (Y := Y) (Λ := Λ) (α := β) (y := y) (f := fβ) hβΛ hyY hfβ
+      exact initSegIsoRel_injective
+        (hRwo := by
+          letI : IsOrdinal Λ := hαΛord
+          exact wellOrderOn_memRelOn (α := Λ))
+        (hSwo := hSwo) α β y hαpair hβpair
+    have : ¬ (∀ α β y : V, IsOrdinal α → IsOrdinal β → Rm α y → Rm β y → α = β) :=
+      not_injective_functionLike_relation_to_set
+        (X := Y) (R := Rm) hRmdef hRmfun
+    exact this hRminj
+  have hExistsUnmapped : ∃ α : V, IsOrdinal α ∧ ¬∃ y ∈ Y, Rm α y := by
+    by_contra! hNo
+    exact hNotAllMapped (by
+      intro α hαord
+      rcases hNo α hαord with ⟨y, hyY, hyRm⟩
+      exact ⟨y, hyY, hyRm⟩)
+  rcases hExistsUnmapped with ⟨α, hαord, hαUnmapped⟩
+  have hαwo : IsWellOrderOn (memRelOn α) α := by
+    letI : IsOrdinal α := hαord
+    exact wellOrderOn_memRelOn (α := α)
+  rcases wellOrder_comparable_by_initSegIsoRel (hRwo := hαwo) (hSwo := hSwo) with
+    hFull | hLeft | hRight
+  · exact ⟨α, hαord, ⟨initSegIsoRel (memRelOn α) α S Y, hFull⟩⟩
+  · rcases hLeft with ⟨a₀, ha₀α, hIso⟩
+    refine ⟨a₀, hαord.of_mem ha₀α, ?_⟩
+    refine ⟨initSegIsoRel (memRelOn α) α S Y, ?_⟩
+    have hIso' : IsOrderIso (memRelOn α) a₀ S Y (initSegIsoRel (memRelOn α) α S Y) := by
+      simpa [initialSegment_memRelOn_eq (α := α) ha₀α] using hIso
+    have ha₀ord : IsOrdinal a₀ := hαord.of_mem ha₀α
+    exact ⟨hIso'.mem_function, hIso'.injective, hIso'.range_eq, fun x₁ hx₁ x₂ hx₂ ↦ by
+      have hx₁α : x₁ ∈ α := hαord.toIsTransitive.transitive _ ha₀α _ hx₁
+      have hx₂α : x₂ ∈ α := hαord.toIsTransitive.transitive _ ha₀α _ hx₂
+      rw [show ⟨x₁, x₂⟩ₖ ∈ memRelOn a₀ ↔ ⟨x₁, x₂⟩ₖ ∈ memRelOn α from by
+        simp [kpair_mem_memRelOn_iff, hx₁, hx₂, hx₁α, hx₂α]]
+      exact hIso'.rel_iff hx₁ hx₂⟩
+  · rcases hRight with ⟨b₀, hb₀Y, hIso⟩
+    have hRmαb₀ : Rm α b₀ := ⟨hb₀Y, initSegIsoRel (memRelOn α) α S Y, hIso⟩
+    exact (hαUnmapped ⟨b₀, hb₀Y, hRmαb₀⟩).elim
+
 end IsOrdinal
 
 variable (V)
@@ -375,6 +646,227 @@ protected noncomputable def succ (α : Ordinal V) : Ordinal V where
 @[simp] lemma lt_succ (α : Ordinal V) : α < α.succ := lt_def.mpr <| by simp
 
 protected noncomputable def ω : Ordinal V := IsOrdinal.toOrdinal ω
+
+private lemma isOrderIso_memRelOn_of_parent
+    {S Y α a f : V} (hαord : IsOrdinal α) (haα : a ∈ α)
+    (hIso : IsOrderIso (IsOrdinal.memRelOn α) a S Y f) :
+    IsOrderIso (IsOrdinal.memRelOn a) a S Y f := by
+  refine ⟨hIso.mem_function, hIso.injective, hIso.range_eq, ?_⟩
+  intro x₁ hx₁ x₂ hx₂
+  have hx₁α : x₁ ∈ α := hαord.toIsTransitive.transitive _ haα _ hx₁
+  have hx₂α : x₂ ∈ α := hαord.toIsTransitive.transitive _ haα _ hx₂
+  rw [show ⟨x₁, x₂⟩ₖ ∈ IsOrdinal.memRelOn a ↔ ⟨x₁, x₂⟩ₖ ∈ IsOrdinal.memRelOn α from by
+      simp [IsOrdinal.kpair_mem_memRelOn_iff, hx₁, hx₂, hx₁α, hx₂α]]
+  exact hIso.rel_iff hx₁ hx₂
+
+private lemma isOrderIso_initialSegment_of_kpair
+    {S Y α a y f : V} (hαord : IsOrdinal α)
+    (hf : IsOrderIso (IsOrdinal.memRelOn α) α S Y f)
+    (haα : a ∈ α) (hayf : ⟨a, y⟩ₖ ∈ f) :
+    IsOrderIso (IsOrdinal.memRelOn a) a S (initialSegment S Y y)
+      (f ↾ (initialSegment (IsOrdinal.memRelOn α) α a)) := by
+  have hRes :
+      IsOrderIso (IsOrdinal.memRelOn α) (initialSegment (IsOrdinal.memRelOn α) α a)
+        S (initialSegment S Y y) (f ↾ (initialSegment (IsOrdinal.memRelOn α) α a)) :=
+    IsOrderIso.restrict_initialSegment hf haα hayf
+  have hRes' :
+      IsOrderIso (IsOrdinal.memRelOn α) a S (initialSegment S Y y)
+        (f ↾ (initialSegment (IsOrdinal.memRelOn α) α a)) := by
+    simpa [IsOrdinal.initialSegment_memRelOn_eq (α := α) haα] using hRes
+  exact isOrderIso_memRelOn_of_parent hαord haα hRes'
+
+private lemma ordinal_eq_of_isOrderIso_to_same_initialSegment
+    [V ⊧ₘ* 𝗭𝗙] {S Y α β y f g : V}
+    (hSwo : IsWellOrderOn S Y) (hαord : IsOrdinal α) (hβord : IsOrdinal β)
+    (hyY : y ∈ Y)
+    (hαy : IsOrderIso (IsOrdinal.memRelOn α) α S (initialSegment S Y y) f)
+    (hβy : IsOrderIso (IsOrdinal.memRelOn β) β S (initialSegment S Y y) g) :
+    α = β := by
+  letI : IsOrdinal α := hαord
+  letI : IsOrdinal β := hβord
+  let Λ : V := succ (α ∪ β)
+  have hαuβord : IsOrdinal (α ∪ β) := by
+    rcases IsOrdinal.subset_or_supset (α := α) (β := β) with (hαβ | hβα)
+    · have : α ∪ β = β := union_eq_iff_left.mpr hαβ
+      simpa [this]
+    · have : α ∪ β = α := union_eq_iff_right.mpr hβα
+      simpa [this]
+  have hΛord : IsOrdinal Λ := IsOrdinal.succ (α := α ∪ β)
+  have hαΛ : α ∈ Λ := by
+    have hαsub : α ⊆ α ∪ β := subset_union_left α β
+    rcases (IsOrdinal.subset_iff (α := α) (β := α ∪ β)).1 hαsub with (hEq | hMem)
+    · rw [mem_succ_iff]; exact Or.inl hEq
+    · rw [mem_succ_iff]; exact Or.inr hMem
+  have hβΛ : β ∈ Λ := by
+    have hβsub : β ⊆ α ∪ β := subset_union_right α β
+    rcases (IsOrdinal.subset_iff (α := β) (β := α ∪ β)).1 hβsub with (hEq | hMem)
+    · rw [mem_succ_iff]; exact Or.inl hEq
+    · rw [mem_succ_iff]; exact Or.inr hMem
+  have hαpair : ⟨α, y⟩ₖ ∈ initSegIsoRel (IsOrdinal.memRelOn Λ) Λ S Y :=
+    IsOrdinal.kpair_mem_initSegIsoRel_memRelOn_of_isOrderIso
+      (S := S) (Y := Y) (Λ := Λ) (α := α) (y := y) (f := f) hαΛ hyY hαy
+  have hβpair : ⟨β, y⟩ₖ ∈ initSegIsoRel (IsOrdinal.memRelOn Λ) Λ S Y :=
+    IsOrdinal.kpair_mem_initSegIsoRel_memRelOn_of_isOrderIso
+      (S := S) (Y := Y) (Λ := Λ) (α := β) (y := y) (f := g) hβΛ hyY hβy
+  exact initSegIsoRel_injective
+    (hRwo := by
+      letI : IsOrdinal Λ := hΛord
+      exact IsOrdinal.wellOrderOn_memRelOn (α := Λ))
+    (hSwo := hSwo) α β y hαpair hβpair
+
+lemma ordinal_isOrderIso_unique_of_wellOrderOn
+    [V ⊧ₘ* 𝗭𝗙] {S Y α β : V} (hSwo : IsWellOrderOn S Y)
+    (hαord : IsOrdinal α) (hβord : IsOrdinal β)
+    (hαiso : ∃ f : V, IsOrderIso (IsOrdinal.memRelOn α) α S Y f)
+    (hβiso : ∃ f : V, IsOrderIso (IsOrdinal.memRelOn β) β S Y f) :
+    α = β := by
+  rcases hαiso with ⟨f, hf⟩
+  rcases hβiso with ⟨g, hg⟩
+  apply subset_antisymm
+  · intro a haα
+    rcases exists_of_mem_function hf.mem_function a haα with ⟨y, hyY, hayf⟩
+    have hαy : IsOrderIso (IsOrdinal.memRelOn a) a S (initialSegment S Y y)
+        (f ↾ (initialSegment (IsOrdinal.memRelOn α) α a)) :=
+      isOrderIso_initialSegment_of_kpair hαord hf haα hayf
+    have hyRangeG : y ∈ range g := by simpa [hg.range_eq] using hyY
+    rcases mem_range_iff.mp hyRangeG with ⟨b, hbg⟩
+    have hbβ : b ∈ β := (mem_of_mem_functions hg.mem_function hbg).1
+    have hβy : IsOrderIso (IsOrdinal.memRelOn b) b S (initialSegment S Y y)
+        (g ↾ (initialSegment (IsOrdinal.memRelOn β) β b)) :=
+      isOrderIso_initialSegment_of_kpair hβord hg hbβ hbg
+    have hab : a = b := ordinal_eq_of_isOrderIso_to_same_initialSegment
+      (hSwo := hSwo) (hαord := hαord.of_mem haα) (hβord := hβord.of_mem hbβ)
+      (hyY := hyY) hαy hβy
+    simpa [hab] using hbβ
+  · intro b hbβ
+    rcases exists_of_mem_function hg.mem_function b hbβ with ⟨y, hyY, hbyg⟩
+    have hβy : IsOrderIso (IsOrdinal.memRelOn b) b S (initialSegment S Y y)
+        (g ↾ (initialSegment (IsOrdinal.memRelOn β) β b)) :=
+      isOrderIso_initialSegment_of_kpair hβord hg hbβ hbyg
+    have hyRangeF : y ∈ range f := by simpa [hf.range_eq] using hyY
+    rcases mem_range_iff.mp hyRangeF with ⟨a, haf⟩
+    have haα : a ∈ α := (mem_of_mem_functions hf.mem_function haf).1
+    have hαy : IsOrderIso (IsOrdinal.memRelOn a) a S (initialSegment S Y y)
+        (f ↾ (initialSegment (IsOrdinal.memRelOn α) α a)) :=
+      isOrderIso_initialSegment_of_kpair hαord hf haα haf
+    have hba : b = a := ordinal_eq_of_isOrderIso_to_same_initialSegment
+      (hSwo := hSwo) (hαord := hβord.of_mem hbβ) (hβord := hαord.of_mem haα)
+      (hyY := hyY) hβy hαy
+    simpa [hba] using haα
+
+lemma existsUnique_ordinal_isOrderIso_of_wellOrderOn
+    [V ⊧ₘ* 𝗭𝗙] {S Y : V} (hSwo : IsWellOrderOn S Y) :
+    ∃! α : V, IsOrdinal α ∧ ∃ f : V, IsOrderIso (IsOrdinal.memRelOn α) α S Y f := by
+  rcases IsOrdinal.exists_ordinal_isOrderIso_of_wellOrderOn (S := S) (Y := Y) hSwo with
+    ⟨α, hαord, f, hf⟩
+  refine ⟨α, ⟨hαord, ⟨f, hf⟩⟩, ?_⟩
+  intro β hβ
+  exact ordinal_isOrderIso_unique_of_wellOrderOn hSwo hβ.1 hαord hβ.2 ⟨f, hf⟩
+
+noncomputable def wellOrderTypeVal
+    [V ⊧ₘ* 𝗭𝗙] (S Y : V) (hSwo : IsWellOrderOn S Y) : V :=
+  Classical.choose <| existsUnique_ordinal_isOrderIso_of_wellOrderOn (S := S) (Y := Y) hSwo
+
+lemma wellOrderTypeVal_spec
+    [V ⊧ₘ* 𝗭𝗙] (S Y : V) (hSwo : IsWellOrderOn S Y) :
+    IsOrdinal (wellOrderTypeVal S Y hSwo) ∧
+      ∃ f : V, IsOrderIso (IsOrdinal.memRelOn (wellOrderTypeVal S Y hSwo))
+        (wellOrderTypeVal S Y hSwo) S Y f :=
+  (Classical.choose_spec <| existsUnique_ordinal_isOrderIso_of_wellOrderOn (S := S) (Y := Y) hSwo).1
+
+noncomputable def wellOrderType
+    [V ⊧ₘ* 𝗭𝗙] (S Y : V) (hSwo : IsWellOrderOn S Y) : Ordinal V :=
+  { val := wellOrderTypeVal S Y hSwo
+    ordinal := (wellOrderTypeVal_spec S Y hSwo).1 }
+
+lemma wellOrderType_isOrderIso
+    [V ⊧ₘ* 𝗭𝗙] (S Y : V) (hSwo : IsWellOrderOn S Y) :
+    ∃ f : V, IsOrderIso
+      (IsOrdinal.memRelOn (wellOrderType S Y hSwo).val) (wellOrderType S Y hSwo).val S Y f := by
+  simpa [wellOrderType] using (wellOrderTypeVal_spec S Y hSwo).2
+
+lemma wellOrderTypeVal_eq_iff_isOrderIso
+    [V ⊧ₘ* 𝗭𝗙] {S Y α : V} (hSwo : IsWellOrderOn S Y) :
+    α = wellOrderTypeVal S Y hSwo ↔
+      IsOrdinal α ∧ ∃ f : V, IsOrderIso (IsOrdinal.memRelOn α) α S Y f := by
+  constructor
+  · intro hα
+    simpa [hα] using wellOrderTypeVal_spec S Y hSwo
+  · intro hα
+    exact (existsUnique_ordinal_isOrderIso_of_wellOrderOn (S := S) (Y := Y) hSwo).unique
+      hα (wellOrderTypeVal_spec S Y hSwo)
+
+noncomputable def wellOrderTypeValTotal
+    [V ⊧ₘ* 𝗭𝗙] (S Y : V) : V := by
+  classical
+  by_cases hSwo : IsWellOrderOn S Y
+  · exact wellOrderTypeVal S Y hSwo
+  · exact ∅
+
+@[simp] lemma wellOrderTypeValTotal_of_wellOrderOn
+    [V ⊧ₘ* 𝗭𝗙] {S Y : V} (hSwo : IsWellOrderOn S Y) :
+    wellOrderTypeValTotal S Y = wellOrderTypeVal S Y hSwo := by
+  simp [wellOrderTypeValTotal, hSwo]
+
+@[simp] lemma wellOrderTypeValTotal_of_not_wellOrderOn
+    [V ⊧ₘ* 𝗭𝗙] {S Y : V} (hSwo : ¬ IsWellOrderOn S Y) :
+    wellOrderTypeValTotal S Y = ∅ := by
+  simp [wellOrderTypeValTotal, hSwo]
+
+lemma wellOrderTypeValTotal_eq_iff_wellOrder_or_fallback
+    [V ⊧ₘ* 𝗭𝗙] (S Y α : V) :
+    α = wellOrderTypeValTotal S Y ↔
+      (IsWellOrderOn S Y ∧ IsOrdinal α ∧
+        ∃ f : V, IsOrderIso (IsOrdinal.memRelOn α) α S Y f) ∨
+      (¬IsWellOrderOn S Y ∧ α = ∅) := by
+  by_cases hSwo : IsWellOrderOn S Y
+  · constructor
+    · intro hα
+      left
+      refine ⟨hSwo, ?_⟩
+      have : α = wellOrderTypeVal S Y hSwo := by
+        simpa [wellOrderTypeValTotal, hSwo] using hα
+      exact (wellOrderTypeVal_eq_iff_isOrderIso (hSwo := hSwo)).1 this
+    · rintro (⟨-, hα⟩ | hfalse)
+      · have : α = wellOrderTypeVal S Y hSwo :=
+          (wellOrderTypeVal_eq_iff_isOrderIso (hSwo := hSwo)).2 hα
+        simpa [wellOrderTypeValTotal, hSwo] using this
+      · exact (hfalse.1 hSwo).elim
+  · constructor
+    · intro hα
+      right
+      exact ⟨hSwo, by simpa [wellOrderTypeValTotal, hSwo] using hα⟩
+    · rintro (hfalse | ⟨-, hα⟩)
+      · exact (hSwo hfalse.1).elim
+      · simpa [wellOrderTypeValTotal, hSwo] using hα
+
+lemma wellOrderTypeValTotal_eq_definable
+    [V ⊧ₘ* 𝗭𝗙] :
+    ℒₛₑₜ-relation₃[V] (fun α S Y ↦ α = wellOrderTypeValTotal S Y) := by
+  let R : V → V → V → Prop := fun α S Y ↦
+    (IsWellOrderOn S Y ∧ IsOrdinal α ∧
+      ∃ f : V, IsOrderIso (IsOrdinal.memRelOn α) α S Y f) ∨
+    (¬IsWellOrderOn S Y ∧ α = ∅)
+  have hWdef : ℒₛₑₜ-relation[V] IsWellOrderOn := by
+    unfold IsWellOrderOn IsStrictLinearOrderOn IsLeastOf
+    definability
+  have hR : ℒₛₑₜ-relation₃[V] R := by
+    letI : ℒₛₑₜ-relation[V] IsWellOrderOn := hWdef
+    letI : ℒₛₑₜ-function₁[V] IsOrdinal.memRelOn := IsOrdinal.memRelOn.definable
+    letI : ℒₛₑₜ-relation₅[V] IsOrderIso := IsOrderIso.definable
+    show ℒₛₑₜ-relation₃[V] (fun α S Y ↦
+      (IsWellOrderOn S Y ∧ IsOrdinal α ∧
+        ∃ f : V, IsOrderIso (IsOrdinal.memRelOn α) α S Y f) ∨
+      (¬IsWellOrderOn S Y ∧ α = ∅))
+    definability
+  have hEq : (fun α S Y ↦ α = wellOrderTypeValTotal S Y) = R := by
+    funext α S Y
+    exact propext (wellOrderTypeValTotal_eq_iff_wellOrder_or_fallback S Y α)
+  simpa [R, hEq] using hR
+
+instance wellOrderTypeValTotal.definable
+    [V ⊧ₘ* 𝗭𝗙] : ℒₛₑₜ-function₂[V] wellOrderTypeValTotal :=
+  wellOrderTypeValTotal_eq_definable (V := V)
 
 noncomputable def minimal (α : Ordinal V) (P : V → Prop) (hP : ℒₛₑₜ-predicate P := by definability) : Ordinal V where
   val := ⋂ˢ {x ∈ ↑α ; P x}

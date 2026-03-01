@@ -472,15 +472,18 @@ lemma domain_restrict_eq (R A : V) : domain (R ↾ A) = domain R ∩ A := by
     ⟨x, y⟩ₖ ∈ (R ↾ A) ↔ ⟨x, y⟩ₖ ∈ R ∧ x ∈ A := by
   simp [mem_restrict_iff]
 
-lemma restrict_restrict_of_subset {R A B : V} (h : B ⊆ A) : (R ↾ A) ↾ B = R ↾ B := by
+lemma restrict_restrict_eq_restrict_inter (R A B : V) : (R ↾ A) ↾ B = R ↾ (A ∩ B) := by
   ext p
-  simp only [mem_restrict_iff]
+  simp only [mem_restrict_iff, mem_inter_iff]
   constructor
-  · rintro ⟨⟨hpR, x, _, y, rfl⟩, x', hx'B, y', hxy⟩
+  · rintro ⟨⟨hpR, x, hxA, y, rfl⟩, x', hx'B, y', hxy⟩
     rcases kpair_inj hxy with ⟨rfl, rfl⟩
-    exact ⟨hpR, x, hx'B, y, rfl⟩
-  · rintro ⟨hpR, x, hxB, y, rfl⟩
-    exact ⟨⟨hpR, x, h x hxB, y, rfl⟩, x, hxB, y, rfl⟩
+    exact ⟨hpR, x, ⟨hxA, hx'B⟩, y, rfl⟩
+  · rintro ⟨hpR, x, hxAB, y, rfl⟩
+    exact ⟨⟨hpR, x, hxAB.1, y, rfl⟩, x, hxAB.2, y, rfl⟩
+
+lemma restrict_restrict_of_subset {R A B : V} (h : B ⊆ A) : (R ↾ A) ↾ B = R ↾ B := by
+  simpa [inter_eq_right_of_subset h] using restrict_restrict_eq_restrict_inter R A B
 
 /-- Image of a set under a relation -/
 noncomputable def image (R A : V) : V := range (restrict R A)
@@ -562,6 +565,776 @@ lemma replacement_graph_exists_on [V ⊧ₘ* 𝗭𝗙] (X : V) (R : V → V → 
       have hR₁ : R x y₁ := (hgraph x hxX y₁).1 hxy₁
       exact (hfun x hxX).unique hR₁ hR₀
   refine ⟨f, IsFunction.of_mem hfunc_mem, hdomain, hgraph⟩
+
+/-! ### Orders and initial-segment isomorphisms -/
+
+/-- A strict total order relation on `X`. -/
+def IsStrictLinearOrderOn (R X : V) : Prop :=
+  R ⊆ X ×ˢ X ∧
+  (∀ x ∈ X, ⟨x, x⟩ₖ ∉ R) ∧
+  (∀ x ∈ X, ∀ y ∈ X, ∀ z ∈ X, ⟨x, y⟩ₖ ∈ R → ⟨y, z⟩ₖ ∈ R → ⟨x, z⟩ₖ ∈ R) ∧
+  (∀ x ∈ X, ∀ y ∈ X, ⟨x, y⟩ₖ ∈ R ∨ x = y ∨ ⟨y, x⟩ₖ ∈ R)
+
+namespace IsStrictLinearOrderOn
+
+lemma subset_prod {R X : V} (h : IsStrictLinearOrderOn R X) : R ⊆ X ×ˢ X := h.1
+
+lemma irrefl {R X x : V} (h : IsStrictLinearOrderOn R X) (hx : x ∈ X) : ⟨x, x⟩ₖ ∉ R := h.2.1 x hx
+
+lemma trans {R X x y z : V} (h : IsStrictLinearOrderOn R X) (hx : x ∈ X) (hy : y ∈ X) (hz : z ∈ X)
+    (hxy : ⟨x, y⟩ₖ ∈ R) (hyz : ⟨y, z⟩ₖ ∈ R) : ⟨x, z⟩ₖ ∈ R := h.2.2.1 x hx y hy z hz hxy hyz
+
+lemma trichotomy {R X x y : V} (h : IsStrictLinearOrderOn R X) (hx : x ∈ X) (hy : y ∈ X) :
+    ⟨x, y⟩ₖ ∈ R ∨ x = y ∨ ⟨y, x⟩ₖ ∈ R := h.2.2.2 x hx y hy
+
+lemma asymm {R X x y : V} (h : IsStrictLinearOrderOn R X) (hx : x ∈ X) (hy : y ∈ X)
+    (hxy : ⟨x, y⟩ₖ ∈ R) (hyx : ⟨y, x⟩ₖ ∈ R) : False := by
+  have hxx : ⟨x, x⟩ₖ ∈ R := h.trans hx hy hx hxy hyx
+  exact h.irrefl hx hxx
+
+end IsStrictLinearOrderOn
+
+/-- `m` is the least element of `A` with respect to strict order `R`. -/
+def IsLeastOf (R A m : V) : Prop :=
+  m ∈ A ∧ ∀ a ∈ A, a = m ∨ ⟨m, a⟩ₖ ∈ R
+
+/-- `R` well-orders `X` (strict-order form). -/
+def IsWellOrderOn (R X : V) : Prop :=
+  IsStrictLinearOrderOn R X ∧
+  ∀ A, A ⊆ X → A ≠ ∅ → ∃ m, IsLeastOf R A m
+
+/-- Initial segment of `(X, R)` below `a`. -/
+noncomputable def initialSegment (R X a : V) : V := {x ∈ X ; ⟨x, a⟩ₖ ∈ R}
+
+def initialSegment.dfn : Semisentence ℒₛₑₜ 4 :=
+  f“I R X a. ∀ x, x ∈ I ↔ x ∈ X ∧ !kpair.dfn x a ∈ R”
+
+instance initialSegment.defined : ℒₛₑₜ-function₃[V] initialSegment via initialSegment.dfn :=
+  ⟨fun v ↦ by
+    simp [initialSegment.dfn, initialSegment]; simp only [mem_ext_iff, mem_sep_iff]⟩
+
+instance initialSegment.definable : ℒₛₑₜ-function₃[V] initialSegment := initialSegment.defined.to_definable
+
+lemma mem_initialSegment_iff {R X a x : V} :
+    x ∈ initialSegment R X a ↔ x ∈ X ∧ ⟨x, a⟩ₖ ∈ R := by
+  simp [initialSegment]
+
+lemma initialSegment_subset (R X a : V) : initialSegment R X a ⊆ X := by
+  intro x hx
+  exact (mem_initialSegment_iff.mp hx).1
+
+/-- `f` is an order isomorphism between `(X, R)` and `(Y, S)`. -/
+def IsOrderIso (R X S Y f : V) : Prop :=
+  f ∈ Y ^ X ∧
+  Injective f ∧
+  range f = Y ∧
+  ∀ x₁ ∈ X, ∀ x₂ ∈ X, ⟨x₁, x₂⟩ₖ ∈ R ↔ ⟨f ‘ x₁, f ‘ x₂⟩ₖ ∈ S
+
+lemma isOrderIso_definable : ℒₛₑₜ-relation₅[V] IsOrderIso := by
+  unfold IsOrderIso
+  definability
+
+instance IsOrderIso.definable : ℒₛₑₜ-relation₅[V] IsOrderIso := isOrderIso_definable
+
+/-- Initial segments by `a` and `b` are order-isomorphic. -/
+def InitSegIso (R X S Y a b : V) : Prop :=
+  ∃ f, IsOrderIso R (initialSegment R X a) S (initialSegment S Y b) f
+
+lemma initSegIso_definable (R X S Y : V) : ℒₛₑₜ-relation[V] (InitSegIso R X S Y) := by
+  letI : ℒₛₑₜ-relation₅[V] IsOrderIso := isOrderIso_definable
+  letI : ℒₛₑₜ-function₃[V] initialSegment := initialSegment.definable
+  unfold InitSegIso
+  definability
+
+instance InitSegIso.definable (R X S Y : V) : ℒₛₑₜ-relation[V] (InitSegIso R X S Y) :=
+  initSegIso_definable R X S Y
+
+/--
+Relation on `X ×ˢ Y`: `a` and `b` are related when their initial segments
+are order-isomorphic.
+-/
+noncomputable def initSegIsoRel (R X S Y : V) : V :=
+  {p ∈ X ×ˢ Y ; ∃ a ∈ X, ∃ b ∈ Y, p = ⟨a, b⟩ₖ ∧ InitSegIso R X S Y a b}
+
+lemma mem_initSegIsoRel_iff {R X S Y p : V} :
+    p ∈ initSegIsoRel R X S Y ↔
+      p ∈ X ×ˢ Y ∧ ∃ a ∈ X, ∃ b ∈ Y, p = ⟨a, b⟩ₖ ∧ InitSegIso R X S Y a b := by
+  simp [initSegIsoRel]
+
+@[simp] lemma kpair_mem_initSegIsoRel_iff {R X S Y a b : V} :
+    ⟨a, b⟩ₖ ∈ initSegIsoRel R X S Y ↔
+      a ∈ X ∧ b ∈ Y ∧ InitSegIso R X S Y a b := by
+  constructor
+  · intro h
+    rcases (mem_initSegIsoRel_iff.mp h) with ⟨hprod, a', ha'X, b', hb'Y, hp, hiso⟩
+    rcases kpair_inj hp with ⟨rfl, rfl⟩
+    have : a ∈ X ∧ b ∈ Y := by simpa [mem_prod_iff] using hprod
+    exact ⟨this.1, this.2, hiso⟩
+  · rintro ⟨haX, hbY, hiso⟩
+    refine mem_initSegIsoRel_iff.mpr ?_
+    refine ⟨?_, a, haX, b, hbY, rfl, hiso⟩
+    simpa [mem_prod_iff] using And.intro haX hbY
+
+lemma value_eq_of_kpair_mem {f X Y x y : V} (hf : f ∈ Y ^ X) (hxy : ⟨x, y⟩ₖ ∈ f) :
+    f ‘ x = y := by
+  have hfunc : IsFunction f := IsFunction.of_mem hf
+  have hx : x ∈ X := (mem_of_mem_functions hf hxy).1
+  have huniq := exists_unique_of_mem_function hf x hx
+  apply subset_antisymm
+  · intro z hz
+    have : z ∈ y := by
+      have hz' : z ∈ ⋃ˢ range f ∧ ∃ w, z ∈ w ∧ ⟨x, w⟩ₖ ∈ f := by simpa [value] using hz
+      rcases hz'.2 with ⟨w, hzw, hxwf⟩
+      have : w = y := huniq.unique hxwf hxy
+      rwa [this] at hzw
+    exact this
+  · intro z hzy
+    suffices z ∈ ⋃ˢ range f ∧ ∃ w, z ∈ w ∧ ⟨x, w⟩ₖ ∈ f by simpa [value] using this
+    exact ⟨mem_sUnion_iff.mpr ⟨y, mem_range_of_kpair_mem hxy, hzy⟩, y, hzy, hxy⟩
+
+namespace IsOrderIso
+
+lemma mem_function {R X S Y f : V} (h : IsOrderIso R X S Y f) : f ∈ Y ^ X := h.1
+
+lemma injective {R X S Y f : V} (h : IsOrderIso R X S Y f) : Injective f := h.2.1
+
+lemma range_eq {R X S Y f : V} (h : IsOrderIso R X S Y f) : range f = Y := h.2.2.1
+
+lemma domain_eq {R X S Y f : V} (h : IsOrderIso R X S Y f) : domain f = X :=
+  domain_eq_of_mem_function h.mem_function
+
+lemma rel_iff {R X S Y f x₁ x₂ : V} (h : IsOrderIso R X S Y f) (hx₁ : x₁ ∈ X) (hx₂ : x₂ ∈ X) :
+    ⟨x₁, x₂⟩ₖ ∈ R ↔ ⟨f ‘ x₁, f ‘ x₂⟩ₖ ∈ S := h.2.2.2 x₁ hx₁ x₂ hx₂
+
+lemma rel_of_pairs {R X S Y f x₁ x₂ y₁ y₂ : V} (h : IsOrderIso R X S Y f)
+    (hx₁ : x₁ ∈ X) (hx₂ : x₂ ∈ X) (hxy₁ : ⟨x₁, y₁⟩ₖ ∈ f) (hxy₂ : ⟨x₂, y₂⟩ₖ ∈ f) :
+    ⟨x₁, x₂⟩ₖ ∈ R ↔ ⟨y₁, y₂⟩ₖ ∈ S := by
+  have hy₁ : f ‘ x₁ = y₁ := value_eq_of_kpair_mem h.mem_function hxy₁
+  have hy₂ : f ‘ x₂ = y₂ := value_eq_of_kpair_mem h.mem_function hxy₂
+  rw [h.rel_iff hx₁ hx₂, hy₁, hy₂]
+
+lemma restrict_initialSegment
+    {R X S Y f x y : V}
+    (h : IsOrderIso R X S Y f)
+    (hx : x ∈ X)
+    (hxy : ⟨x, y⟩ₖ ∈ f) :
+    IsOrderIso R (initialSegment R X x) S (initialSegment S Y y) (f ↾ (initialSegment R X x)) := by
+  have hfun : f ∈ Y ^ X := h.mem_function
+  have hres_fun : f ↾ (initialSegment R X x) ∈ initialSegment S Y y ^ initialSegment R X x := by
+    apply mem_function.intro
+    · intro p hp
+      rcases mem_restrict_iff.mp hp with ⟨hpf, u, huI, v, rfl⟩
+      have huX : u ∈ X := (mem_initialSegment_iff.mp huI).1
+      have huxR : ⟨u, x⟩ₖ ∈ R := (mem_initialSegment_iff.mp huI).2
+      have hvY : v ∈ Y := (mem_of_mem_functions hfun hpf).2
+      have hvyS : ⟨v, y⟩ₖ ∈ S := (h.rel_of_pairs huX hx hpf hxy).1 huxR
+      have hvI : v ∈ initialSegment S Y y := mem_initialSegment_iff.mpr ⟨hvY, hvyS⟩
+      simpa [mem_prod_iff] using And.intro huI hvI
+    · intro u huI
+      have huX : u ∈ X := (mem_initialSegment_iff.mp huI).1
+      have huxR : ⟨u, x⟩ₖ ∈ R := (mem_initialSegment_iff.mp huI).2
+      rcases exists_unique_of_mem_function hfun u huX with ⟨v, huvf, huvuniq⟩
+      have hvY : v ∈ Y := (mem_of_mem_functions hfun huvf).2
+      have hvyS : ⟨v, y⟩ₖ ∈ S := (h.rel_of_pairs huX hx huvf hxy).1 huxR
+      refine ExistsUnique.intro v ?_ ?_
+      · exact kpair_mem_restrict_iff.mpr ⟨huvf, huI⟩
+      · intro w huwres
+        have huw : ⟨u, w⟩ₖ ∈ f := (kpair_mem_restrict_iff.mp huwres).1
+        exact huvuniq w huw
+  have hres_inj : Injective (f ↾ (initialSegment R X x)) := by
+    intro u₁ u₂ v hu₁ hu₂
+    have hu₁f : ⟨u₁, v⟩ₖ ∈ f := (kpair_mem_restrict_iff.mp hu₁).1
+    have hu₂f : ⟨u₂, v⟩ₖ ∈ f := (kpair_mem_restrict_iff.mp hu₂).1
+    exact h.injective _ _ _ hu₁f hu₂f
+  have hres_range : range (f ↾ (initialSegment R X x)) = initialSegment S Y y := by
+    apply subset_antisymm
+    · intro v hv
+      rcases mem_range_iff.mp hv with ⟨u, huvres⟩
+      have huvf : ⟨u, v⟩ₖ ∈ f := (kpair_mem_restrict_iff.mp huvres).1
+      have huI : u ∈ initialSegment R X x := (kpair_mem_restrict_iff.mp huvres).2
+      have huX : u ∈ X := (mem_initialSegment_iff.mp huI).1
+      have huxR : ⟨u, x⟩ₖ ∈ R := (mem_initialSegment_iff.mp huI).2
+      have hvY : v ∈ Y := (mem_of_mem_functions hfun huvf).2
+      have hvyS : ⟨v, y⟩ₖ ∈ S := (h.rel_of_pairs huX hx huvf hxy).1 huxR
+      exact mem_initialSegment_iff.mpr ⟨hvY, hvyS⟩
+    · intro v hvI
+      have hvY : v ∈ Y := (mem_initialSegment_iff.mp hvI).1
+      have hvyS : ⟨v, y⟩ₖ ∈ S := (mem_initialSegment_iff.mp hvI).2
+      have hvRangeF : v ∈ range f := by rw [h.range_eq]; exact hvY
+      rcases mem_range_iff.mp hvRangeF with ⟨u, huvf⟩
+      have huX : u ∈ X := (mem_of_mem_functions hfun huvf).1
+      have huxR : ⟨u, x⟩ₖ ∈ R := (h.rel_of_pairs huX hx huvf hxy).2 hvyS
+      have huI : u ∈ initialSegment R X x := mem_initialSegment_iff.mpr ⟨huX, huxR⟩
+      exact mem_range_iff.mpr ⟨u, kpair_mem_restrict_iff.mpr ⟨huvf, huI⟩⟩
+  have hres_rel :
+      ∀ u₁ ∈ initialSegment R X x, ∀ u₂ ∈ initialSegment R X x,
+        ⟨u₁, u₂⟩ₖ ∈ R ↔ ⟨(f ↾ (initialSegment R X x)) ‘ u₁, (f ↾ (initialSegment R X x)) ‘ u₂⟩ₖ ∈ S := by
+    intro u₁ hu₁I u₂ hu₂I
+    have hu₁X : u₁ ∈ X := (mem_initialSegment_iff.mp hu₁I).1
+    have hu₂X : u₂ ∈ X := (mem_initialSegment_iff.mp hu₂I).1
+    rcases exists_of_mem_function hres_fun u₁ hu₁I with ⟨v₁, hv₁I, hu₁v₁res⟩
+    rcases exists_of_mem_function hres_fun u₂ hu₂I with ⟨v₂, hv₂I, hu₂v₂res⟩
+    have hu₁v₁f : ⟨u₁, v₁⟩ₖ ∈ f := (kpair_mem_restrict_iff.mp hu₁v₁res).1
+    have hu₂v₂f : ⟨u₂, v₂⟩ₖ ∈ f := (kpair_mem_restrict_iff.mp hu₂v₂res).1
+    have hv₁eq : (f ↾ (initialSegment R X x)) ‘ u₁ = v₁ := value_eq_of_kpair_mem hres_fun hu₁v₁res
+    have hv₂eq : (f ↾ (initialSegment R X x)) ‘ u₂ = v₂ := value_eq_of_kpair_mem hres_fun hu₂v₂res
+    have hpair : ⟨u₁, u₂⟩ₖ ∈ R ↔ ⟨v₁, v₂⟩ₖ ∈ S := h.rel_of_pairs hu₁X hu₂X hu₁v₁f hu₂v₂f
+    simpa [hv₁eq, hv₂eq] using hpair
+  exact ⟨hres_fun, hres_inj, hres_range, hres_rel⟩
+
+lemma symm [V ⊧ₘ* 𝗭𝗙] {R X S Y f : V} (h : IsOrderIso R X S Y f) :
+    ∃ g, IsOrderIso S Y R X g := by
+  let T : V → V → Prop := fun y x ↦ ⟨x, y⟩ₖ ∈ f
+  have hT : ℒₛₑₜ-relation[V] T := by
+    change ℒₛₑₜ-relation[V] (fun y x ↦ ⟨x, y⟩ₖ ∈ f)
+    definability
+  have hfunT : ∀ y : V, y ∈ Y → ∃! x : V, T y x := by
+    intro y hyY
+    have hyRange : y ∈ range f := by simpa [h.range_eq] using hyY
+    rcases mem_range_iff.mp hyRange with ⟨x, hxyf⟩
+    refine ⟨x, hxyf, ?_⟩
+    intro x' hx'
+    exact h.injective _ _ _ hx' hxyf
+  rcases replacement_graph_exists_on (X := Y) T hT hfunT with ⟨g, hgFun, hgDom, hgGraph⟩
+  have hg_isFunction : IsFunction g := hgFun
+  have hgMemRange : g ∈ range g ^ domain g := IsFunction.mem_function g
+  have hgMemRangeY : g ∈ range g ^ Y := by simpa [hgDom] using hgMemRange
+  have hRangeSubX : range g ⊆ X := by
+    intro x hxRange
+    rcases mem_range_iff.mp hxRange with ⟨y, hyxg⟩
+    have hyD : y ∈ domain g := mem_domain_of_kpair_mem hyxg
+    have hyY : y ∈ Y := by simpa [hgDom] using hyD
+    have hxyf : ⟨x, y⟩ₖ ∈ f := (hgGraph y hyY x).1 hyxg
+    exact (mem_of_mem_functions h.mem_function hxyf).1
+  have hgMem : g ∈ X ^ Y := mem_function_of_mem_function_of_subset hgMemRangeY hRangeSubX
+  have hgInj : Injective g := by
+    intro y₁ y₂ x hy₁ hy₂
+    have hy₁D : y₁ ∈ domain g := mem_domain_of_kpair_mem hy₁
+    have hy₁Y : y₁ ∈ Y := by simpa [hgDom] using hy₁D
+    have hy₂D : y₂ ∈ domain g := mem_domain_of_kpair_mem hy₂
+    have hy₂Y : y₂ ∈ Y := by simpa [hgDom] using hy₂D
+    have hxy₁f : ⟨x, y₁⟩ₖ ∈ f := (hgGraph y₁ hy₁Y x).1 hy₁
+    have hxy₂f : ⟨x, y₂⟩ₖ ∈ f := (hgGraph y₂ hy₂Y x).1 hy₂
+    have hfunc : IsFunction f := IsFunction.of_mem h.mem_function
+    exact hfunc.unique hxy₁f hxy₂f
+  have hgRangeEq : range g = X := by
+    apply subset_antisymm
+    · intro x hxRange
+      rcases mem_range_iff.mp hxRange with ⟨y, hyxg⟩
+      have hyD : y ∈ domain g := mem_domain_of_kpair_mem hyxg
+      have hyY : y ∈ Y := by simpa [hgDom] using hyD
+      have hxyf : ⟨x, y⟩ₖ ∈ f := (hgGraph y hyY x).1 hyxg
+      exact (mem_of_mem_functions h.mem_function hxyf).1
+    · intro x hxX
+      rcases exists_of_mem_function h.mem_function x hxX with ⟨y, hyY, hxyf⟩
+      have hyxg : ⟨y, x⟩ₖ ∈ g := (hgGraph y hyY x).2 hxyf
+      exact mem_range_iff.mpr ⟨y, hyxg⟩
+  have hgRel :
+      ∀ y₁ ∈ Y, ∀ y₂ ∈ Y,
+        ⟨y₁, y₂⟩ₖ ∈ S ↔ ⟨g ‘ y₁, g ‘ y₂⟩ₖ ∈ R := by
+    intro y₁ hy₁Y y₂ hy₂Y
+    rcases exists_of_mem_function hgMem y₁ hy₁Y with ⟨x₁, hx₁X, hy₁x₁g⟩
+    rcases exists_of_mem_function hgMem y₂ hy₂Y with ⟨x₂, hx₂X, hy₂x₂g⟩
+    have hxy₁f : ⟨x₁, y₁⟩ₖ ∈ f := (hgGraph y₁ hy₁Y x₁).1 hy₁x₁g
+    have hxy₂f : ⟨x₂, y₂⟩ₖ ∈ f := (hgGraph y₂ hy₂Y x₂).1 hy₂x₂g
+    have hy₁val : g ‘ y₁ = x₁ := value_eq_of_kpair_mem hgMem hy₁x₁g
+    have hy₂val : g ‘ y₂ = x₂ := value_eq_of_kpair_mem hgMem hy₂x₂g
+    have hrel : ⟨x₁, x₂⟩ₖ ∈ R ↔ ⟨y₁, y₂⟩ₖ ∈ S := h.rel_of_pairs hx₁X hx₂X hxy₁f hxy₂f
+    simpa [hy₁val, hy₂val] using hrel.symm
+  exact ⟨g, ⟨hgMem, hgInj, hgRangeEq, hgRel⟩⟩
+
+end IsOrderIso
+
+lemma IsOrderIso.unique_of_wellOrder
+    {R X S Y f g : V}
+    (hRwo : IsWellOrderOn R X)
+    (hSlin : IsStrictLinearOrderOn S Y)
+    (hf : IsOrderIso R X S Y f)
+    (hg : IsOrderIso R X S Y g) : f = g := by
+  by_contra hfg
+  let A : V := {x ∈ X ; ∃ y₁ y₂, ⟨x, y₁⟩ₖ ∈ f ∧ ⟨x, y₂⟩ₖ ∈ g ∧ y₁ ≠ y₂}
+  have hA_sub : A ⊆ X := sep_subset
+  have hA_nonempty : IsNonempty A := by
+    have hneqMem : ∃ p, (p ∈ f ∧ p ∉ g) ∨ (p ∈ g ∧ p ∉ f) := by
+      by_contra h
+      apply hfg
+      ext p
+      constructor
+      · intro hp
+        by_contra hpg
+        exact h ⟨p, Or.inl ⟨hp, hpg⟩⟩
+      · intro hp
+        by_contra hpf
+        exact h ⟨p, Or.inr ⟨hp, hpf⟩⟩
+    rcases hneqMem with ⟨p, hp | hp⟩
+    · rcases hp with ⟨hpf, hpng⟩
+      rcases show ∃ x ∈ X, ∃ y ∈ Y, p = ⟨x, y⟩ₖ from by
+          simpa [mem_prod_iff] using subset_prod_of_mem_function hf.mem_function p hpf with
+        ⟨x, hxX, y₁, hy₁Y, rfl⟩
+      rcases exists_of_mem_function hg.mem_function x hxX with ⟨y₂, hy₂Y, hxy₂g⟩
+      have hyne : y₁ ≠ y₂ := by
+        intro hEq
+        apply hpng
+        simpa [hEq] using hxy₂g
+      exact ⟨x, mem_sep_iff.mpr ⟨hxX, y₁, y₂, hpf, hxy₂g, hyne⟩⟩
+    · rcases hp with ⟨hpg, hpnf⟩
+      rcases show ∃ x ∈ X, ∃ y ∈ Y, p = ⟨x, y⟩ₖ from by
+          simpa [mem_prod_iff] using subset_prod_of_mem_function hg.mem_function p hpg with
+        ⟨x, hxX, y₂, hy₂Y, rfl⟩
+      rcases exists_of_mem_function hf.mem_function x hxX with ⟨y₁, hy₁Y, hxy₁f⟩
+      have hyne : y₁ ≠ y₂ := by
+        intro hEq
+        apply hpnf
+        simpa [hEq] using hxy₁f
+      exact ⟨x, mem_sep_iff.mpr ⟨hxX, y₁, y₂, hxy₁f, hpg, hyne⟩⟩
+  have hA_ne : A ≠ ∅ := by
+    intro hA0
+    rcases hA_nonempty with ⟨x, hxA⟩
+    simp [hA0] at hxA
+  rcases hRwo.2 A hA_sub hA_ne with ⟨m, hmA, hmLeast⟩
+  rcases (show m ∈ X ∧ ∃ y₁ y₂, ⟨m, y₁⟩ₖ ∈ f ∧ ⟨m, y₂⟩ₖ ∈ g ∧ y₁ ≠ y₂ from mem_sep_iff.mp hmA) with
+    ⟨hmX, y₁, y₂, hmy₁f, hmy₂g, hyne⟩
+  have hy₁Y : y₁ ∈ Y := (mem_of_mem_functions hf.mem_function hmy₁f).2
+  have hy₂Y : y₂ ∈ Y := (mem_of_mem_functions hg.mem_function hmy₂g).2
+  rcases hSlin.trichotomy hy₁Y hy₂Y with (hy₁₂ | hEq | hy₂₁)
+  · have hy₁R : y₁ ∈ range g := by
+      rw [hg.range_eq]
+      exact hy₁Y
+    rcases mem_range_iff.mp hy₁R with ⟨u, huy₁g⟩
+    have huX : u ∈ X := (mem_of_mem_functions hg.mem_function huy₁g).1
+    have hu_lt_m : ⟨u, m⟩ₖ ∈ R := (hg.rel_of_pairs huX hmX huy₁g hmy₂g).2 hy₁₂
+    rcases exists_of_mem_function hf.mem_function u huX with ⟨z, hzY, huzf⟩
+    have hz_ne_y₁ : z ≠ y₁ := by
+      intro hzEq
+      have hu_eq_m : u = m := hf.injective _ _ _ (by rw [hzEq] at huzf; exact huzf) hmy₁f
+      subst hu_eq_m
+      have hg_func : IsFunction g := IsFunction.of_mem hg.mem_function
+      have : y₁ = y₂ := hg_func.unique huy₁g hmy₂g
+      exact hyne this
+    have huA : u ∈ A := by
+      exact mem_sep_iff.mpr ⟨huX, z, y₁, huzf, huy₁g, hz_ne_y₁⟩
+    have hleast_u : u = m ∨ ⟨m, u⟩ₖ ∈ R := hmLeast u huA
+    rcases hleast_u with (hu_eq_m | hm_lt_u)
+    · exact hRwo.1.irrefl hmX (by simpa [hu_eq_m] using hu_lt_m)
+    · exact (hRwo.1.asymm hmX huX hm_lt_u hu_lt_m).elim
+  · exact hyne hEq
+  · have hy₂R : y₂ ∈ range f := by
+      rw [hf.range_eq]
+      exact hy₂Y
+    rcases mem_range_iff.mp hy₂R with ⟨u, huy₂f⟩
+    have huX : u ∈ X := (mem_of_mem_functions hf.mem_function huy₂f).1
+    have hu_lt_m : ⟨u, m⟩ₖ ∈ R := (hf.rel_of_pairs huX hmX huy₂f hmy₁f).2 hy₂₁
+    rcases exists_of_mem_function hg.mem_function u huX with ⟨z, hzY, huzg⟩
+    have hz_ne_y₂ : z ≠ y₂ := by
+      intro hzEq
+      have hu_eq_m : u = m := hg.injective _ _ _ (by rw [hzEq] at huzg; exact huzg) hmy₂g
+      subst hu_eq_m
+      have hf_func : IsFunction f := IsFunction.of_mem hf.mem_function
+      have : y₂ = y₁ := hf_func.unique huy₂f hmy₁f
+      exact hyne this.symm
+    have huA : u ∈ A := by
+      exact mem_sep_iff.mpr ⟨huX, y₂, z, huy₂f, huzg, hz_ne_y₂.symm⟩
+    have hleast_u : u = m ∨ ⟨m, u⟩ₖ ∈ R := hmLeast u huA
+    rcases hleast_u with (hu_eq_m | hm_lt_u)
+    · exact hRwo.1.irrefl hmX (by simpa [hu_eq_m] using hu_lt_m)
+    · exact (hRwo.1.asymm hmX huX hm_lt_u hu_lt_m).elim
+
+namespace InitSegIso
+
+lemma witnesses_mem {R X S Y a b : V} (h : InitSegIso R X S Y a b) :
+    ∃ f, f ∈ initialSegment S Y b ^ initialSegment R X a := by
+  rcases h with ⟨f, hf⟩
+  exact ⟨f, hf.1⟩
+
+lemma witness_unique
+    {R X S Y a b f g : V}
+    (hRwo : IsWellOrderOn R (initialSegment R X a))
+    (hSlin : IsStrictLinearOrderOn S (initialSegment S Y b))
+    (hf : IsOrderIso R (initialSegment R X a) S (initialSegment S Y b) f)
+    (hg : IsOrderIso R (initialSegment R X a) S (initialSegment S Y b) g) :
+    f = g :=
+  IsOrderIso.unique_of_wellOrder hRwo hSlin hf hg
+
+lemma witness_value_coherent
+    {R X S Y a b f g x y₁ y₂ : V}
+    (hRwo : IsWellOrderOn R (initialSegment R X a))
+    (hSlin : IsStrictLinearOrderOn S (initialSegment S Y b))
+    (hf : IsOrderIso R (initialSegment R X a) S (initialSegment S Y b) f)
+    (hg : IsOrderIso R (initialSegment R X a) S (initialSegment S Y b) g)
+    (hxy₁ : ⟨x, y₁⟩ₖ ∈ f)
+    (hxy₂ : ⟨x, y₂⟩ₖ ∈ g) :
+    y₁ = y₂ := by
+  have hfg : f = g := witness_unique hRwo hSlin hf hg
+  subst hfg
+  have : IsFunction f := IsFunction.of_mem hf.mem_function
+  exact IsFunction.unique hxy₁ hxy₂
+
+@[symm] lemma symm [V ⊧ₘ* 𝗭𝗙] {R X S Y a b : V} (h : InitSegIso R X S Y a b) :
+    InitSegIso S Y R X b a := by
+  rcases h with ⟨f, hf⟩
+  rcases IsOrderIso.symm hf with ⟨g, hg⟩
+  exact ⟨g, hg⟩
+
+end InitSegIso
+
+lemma initSegIsoRel_subset_prod (R X S Y : V) : initSegIsoRel R X S Y ⊆ X ×ˢ Y := by
+  intro p hp
+  exact (mem_initSegIsoRel_iff.mp hp).1
+
+lemma domain_initSegIsoRel_subset (R X S Y : V) : domain (initSegIsoRel R X S Y) ⊆ X := by
+  exact domain_subset_of_subset_prod (initSegIsoRel_subset_prod R X S Y)
+
+lemma range_initSegIsoRel_subset (R X S Y : V) : range (initSegIsoRel R X S Y) ⊆ Y := by
+  exact range_subset_of_subset_prod (initSegIsoRel_subset_prod R X S Y)
+
+lemma mem_domain_initSegIsoRel_iff {R X S Y a : V} :
+    a ∈ domain (initSegIsoRel R X S Y) ↔ a ∈ X ∧ ∃ b ∈ Y, InitSegIso R X S Y a b := by
+  constructor
+  · intro ha
+    rcases mem_domain_iff.mp ha with ⟨b, hab⟩
+    rcases (kpair_mem_initSegIsoRel_iff.mp hab) with ⟨haX, hbY, hiso⟩
+    exact ⟨haX, b, hbY, hiso⟩
+  · rintro ⟨haX, b, hbY, hiso⟩
+    exact mem_domain_iff.mpr ⟨b, kpair_mem_initSegIsoRel_iff.mpr ⟨haX, hbY, hiso⟩⟩
+
+@[simp] lemma kpair_mem_initSegIsoRel_swap_iff [V ⊧ₘ* 𝗭𝗙] {R X S Y a b : V} :
+    ⟨a, b⟩ₖ ∈ initSegIsoRel R X S Y ↔ ⟨b, a⟩ₖ ∈ initSegIsoRel S Y R X := by
+  constructor
+  · intro hab
+    rcases kpair_mem_initSegIsoRel_iff.mp hab with ⟨haX, hbY, habIso⟩
+    exact kpair_mem_initSegIsoRel_iff.mpr ⟨hbY, haX, InitSegIso.symm habIso⟩
+  · intro hba
+    rcases kpair_mem_initSegIsoRel_iff.mp hba with ⟨hbY, haX, hbaIso⟩
+    exact kpair_mem_initSegIsoRel_iff.mpr ⟨haX, hbY, InitSegIso.symm hbaIso⟩
+
+lemma domain_initSegIsoRel_swap_eq_range [V ⊧ₘ* 𝗭𝗙] (R X S Y : V) :
+    domain (initSegIsoRel S Y R X) = range (initSegIsoRel R X S Y) := by
+  ext z
+  constructor
+  · intro hz
+    rcases mem_domain_iff.mp hz with ⟨x, hzx⟩
+    have hxz : ⟨x, z⟩ₖ ∈ initSegIsoRel R X S Y := (kpair_mem_initSegIsoRel_swap_iff.mp hzx)
+    exact mem_range_iff.mpr ⟨x, hxz⟩
+  · intro hz
+    rcases mem_range_iff.mp hz with ⟨x, hxz⟩
+    have hzx : ⟨z, x⟩ₖ ∈ initSegIsoRel S Y R X := (kpair_mem_initSegIsoRel_swap_iff.mp hxz)
+    exact mem_domain_iff.mpr ⟨x, hzx⟩
+
+lemma initialSegment_of_initialSegment_eq
+    {R X a₁ a₂ : V}
+    (hRlin : IsStrictLinearOrderOn R X)
+    (ha₁X : a₁ ∈ X) (ha₂X : a₂ ∈ X)
+    (ha₁a₂ : ⟨a₁, a₂⟩ₖ ∈ R) :
+    initialSegment R (initialSegment R X a₂) a₁ = initialSegment R X a₁ := by
+  ext x
+  simp only [mem_initialSegment_iff]
+  constructor
+  · rintro ⟨⟨hxX, _⟩, hxa₁⟩
+    exact ⟨hxX, hxa₁⟩
+  · rintro ⟨hxX, hxa₁⟩
+    exact ⟨⟨hxX, hRlin.trans hxX ha₁X ha₂X hxa₁ ha₁a₂⟩, hxa₁⟩
+
+lemma initialSegment_of_initialSegment_eq'
+    {S Y b₁ b₂ : V}
+    (hSlin : IsStrictLinearOrderOn S Y)
+    (hb₁Y : b₁ ∈ Y) (hb₂Y : b₂ ∈ Y)
+    (hb₁b₂ : ⟨b₁, b₂⟩ₖ ∈ S) :
+    initialSegment S (initialSegment S Y b₂) b₁ = initialSegment S Y b₁ :=
+  initialSegment_of_initialSegment_eq hSlin hb₁Y hb₂Y hb₁b₂
+
+lemma initSegIsoRel_exists_lt_of_lt
+    {R X S Y a₁ a₂ b₂ : V}
+    (hRlin : IsStrictLinearOrderOn R X)
+    (hSlin : IsStrictLinearOrderOn S Y)
+    (ha₁a₂ : ⟨a₁, a₂⟩ₖ ∈ R)
+    (ha₂b₂ : ⟨a₂, b₂⟩ₖ ∈ initSegIsoRel R X S Y) :
+    ∃ b₁, ⟨b₁, b₂⟩ₖ ∈ S ∧ ⟨a₁, b₁⟩ₖ ∈ initSegIsoRel R X S Y := by
+  rcases (kpair_mem_initSegIsoRel_iff.mp ha₂b₂) with ⟨ha₂X, hb₂Y, hIso₂⟩
+  rcases hIso₂ with ⟨g, hg⟩
+  have ha₁X : a₁ ∈ X := by
+    exact (show a₁ ∈ X ∧ a₂ ∈ X by simpa [mem_prod_iff] using hRlin.subset_prod _ ha₁a₂).1
+  have ha₁I₂ : a₁ ∈ initialSegment R X a₂ := mem_initialSegment_iff.mpr ⟨ha₁X, ha₁a₂⟩
+  have hgfun : g ∈ initialSegment S Y b₂ ^ initialSegment R X a₂ := hg.1
+  rcases exists_of_mem_function hgfun a₁ ha₁I₂ with ⟨b₁, hb₁I₂, ha₁b₁g⟩
+  have hb₁b₂ : ⟨b₁, b₂⟩ₖ ∈ S := (mem_initialSegment_iff.mp hb₁I₂).2
+  have hb₁Y : b₁ ∈ Y := (mem_initialSegment_iff.mp hb₁I₂).1
+  have hNested := hg.restrict_initialSegment ha₁I₂ ha₁b₁g
+  have hRewriteR := initialSegment_of_initialSegment_eq hRlin ha₁X ha₂X ha₁a₂
+  have hRewriteS := initialSegment_of_initialSegment_eq' hSlin hb₁Y hb₂Y hb₁b₂
+  have hIso₁ : InitSegIso R X S Y a₁ b₁ := by
+    rw [hRewriteR, hRewriteS] at hNested
+    exact ⟨g ↾ (initialSegment R X a₁), hNested⟩
+  exact ⟨b₁, hb₁b₂, kpair_mem_initSegIsoRel_iff.mpr ⟨ha₁X, hb₁Y, hIso₁⟩⟩
+
+lemma domain_initSegIsoRel_eq_or_eq_initialSegment_of_least_not_mem
+    {R X S Y : V}
+    (hRwo : IsWellOrderOn R X)
+    (hSlin : IsStrictLinearOrderOn S Y) :
+    domain (initSegIsoRel R X S Y) = X ∨
+      ∃ a₀, a₀ ∈ X ∧ a₀ ∉ domain (initSegIsoRel R X S Y) ∧
+        domain (initSegIsoRel R X S Y) = initialSegment R X a₀ := by
+  let D : V := domain (initSegIsoRel R X S Y)
+  have hDsubX : D ⊆ X := domain_initSegIsoRel_subset R X S Y
+  by_cases hDX : D = X
+  · left
+    exact hDX
+  · right
+    have hXD_nonempty : IsNonempty (X \ D) := isNonempty_sdiff_of_ssubset ⟨hDsubX, by
+      intro hXD; exact (hDX hXD).elim⟩
+    have hXD_ne : X \ D ≠ ∅ := ne_empty_iff_isNonempty.mpr hXD_nonempty
+    have hXD_sub : X \ D ⊆ X := fun x hx ↦ (mem_sdiff_iff.mp hx).1
+    rcases hRwo.2 (X \ D) hXD_sub hXD_ne with ⟨a₀, ha₀XD, ha₀Least⟩
+    have ha₀X : a₀ ∈ X := (mem_sdiff_iff.mp ha₀XD).1
+    have ha₀nD : a₀ ∉ D := (mem_sdiff_iff.mp ha₀XD).2
+    have hD_sub_seg : D ⊆ initialSegment R X a₀ := by
+      intro a haD
+      have haX : a ∈ X := hDsubX _ haD
+      rcases hRwo.1.trichotomy haX ha₀X with (haa₀ | hEq | ha₀a)
+      · exact mem_initialSegment_iff.mpr ⟨haX, haa₀⟩
+      · subst hEq
+        exact (ha₀nD haD).elim
+      · have : a₀ ∈ D := by
+          rcases mem_domain_iff.mp haD with ⟨b, hab⟩
+          rcases initSegIsoRel_exists_lt_of_lt hRwo.1 hSlin ha₀a hab with ⟨b₀, -, ha₀b₀⟩
+          exact mem_domain_iff.mpr ⟨b₀, ha₀b₀⟩
+        exact (ha₀nD this).elim
+    have hseg_sub_D : initialSegment R X a₀ ⊆ D := by
+      intro a haSeg
+      have haX : a ∈ X := (mem_initialSegment_iff.mp haSeg).1
+      have haa₀ : ⟨a, a₀⟩ₖ ∈ R := (mem_initialSegment_iff.mp haSeg).2
+      by_contra haD
+      have haXD : a ∈ X \ D := by simp [haX, haD]
+      have hleast := ha₀Least a haXD
+      rcases hleast with (hEq | ha₀a)
+      · subst hEq
+        exact hRwo.1.irrefl ha₀X haa₀
+      · exact (hRwo.1.asymm haX ha₀X haa₀ ha₀a).elim
+    refine ⟨a₀, ha₀X, ha₀nD, ?_⟩
+    exact subset_antisymm hD_sub_seg hseg_sub_D
+
+lemma range_initSegIsoRel_eq_or_eq_initialSegment_of_least_not_mem [V ⊧ₘ* 𝗭𝗙]
+    {R X S Y : V}
+    (hRlin : IsStrictLinearOrderOn R X)
+    (hSwo : IsWellOrderOn S Y) :
+    range (initSegIsoRel R X S Y) = Y ∨
+      ∃ b₀, b₀ ∈ Y ∧ b₀ ∉ range (initSegIsoRel R X S Y) ∧
+        range (initSegIsoRel R X S Y) = initialSegment S Y b₀ := by
+  have hswap : domain (initSegIsoRel S Y R X) = range (initSegIsoRel R X S Y) :=
+    domain_initSegIsoRel_swap_eq_range R X S Y
+  have hdom :
+      domain (initSegIsoRel S Y R X) = Y ∨
+        ∃ b₀, b₀ ∈ Y ∧ b₀ ∉ domain (initSegIsoRel S Y R X) ∧
+          domain (initSegIsoRel S Y R X) = initialSegment S Y b₀ :=
+    domain_initSegIsoRel_eq_or_eq_initialSegment_of_least_not_mem
+      (R := S) (X := Y) (S := R) (Y := X) hSwo hRlin
+  rcases hdom with hfull | ⟨b₀, hb₀Y, hb₀n, hEq⟩
+  · left
+    simpa [hswap] using hfull
+  · right
+    refine ⟨b₀, hb₀Y, ?_, ?_⟩
+    · simpa [hswap] using hb₀n
+    · exact hswap.symm.trans hEq
+
+lemma initSegIsoRel_value_unique [V ⊧ₘ* 𝗭𝗙]
+    {R X S Y a b₁ b₂ : V}
+    (hRwo : IsWellOrderOn R X)
+    (hSwo : IsWellOrderOn S Y)
+    (hab₁ : ⟨a, b₁⟩ₖ ∈ initSegIsoRel R X S Y)
+    (hab₂ : ⟨a, b₂⟩ₖ ∈ initSegIsoRel R X S Y) :
+    b₁ = b₂ := by
+  by_contra hbne
+  let A : V := {x ∈ X ; ∃ y₁ y₂,
+    ⟨x, y₁⟩ₖ ∈ initSegIsoRel R X S Y ∧
+    ⟨x, y₂⟩ₖ ∈ initSegIsoRel R X S Y ∧ y₁ ≠ y₂}
+  have haX : a ∈ X := (kpair_mem_initSegIsoRel_iff.mp hab₁).1
+  have haA : a ∈ A := mem_sep_iff.mpr ⟨haX, b₁, b₂, hab₁, hab₂, hbne⟩
+  have hA_sub : A ⊆ X := sep_subset
+  have hA_ne : A ≠ ∅ := by
+    intro hA0
+    rw [hA0] at haA
+    simp at haA
+  rcases hRwo.2 A hA_sub hA_ne with ⟨m, hmA, hmLeast⟩
+  rcases (mem_sep_iff.mp hmA) with ⟨hmX, y₁, y₂, hmy₁, hmy₂, hyne⟩
+  have hy₁Y : y₁ ∈ Y := (kpair_mem_initSegIsoRel_iff.mp hmy₁).2.1
+  have hy₂Y : y₂ ∈ Y := (kpair_mem_initSegIsoRel_iff.mp hmy₂).2.1
+  rcases hSwo.1.trichotomy hy₁Y hy₂Y with (hy₁₂ | hEq | hy₂₁)
+  · have hy₂m_sw : ⟨y₂, m⟩ₖ ∈ initSegIsoRel S Y R X :=
+      (kpair_mem_initSegIsoRel_swap_iff.mp hmy₂)
+    rcases initSegIsoRel_exists_lt_of_lt (R := S) (X := Y) (S := R) (Y := X)
+        hSwo.1 hRwo.1 hy₁₂ hy₂m_sw with ⟨x₁, hx₁m, hy₁x₁_sw⟩
+    have hx₁y₁ : ⟨x₁, y₁⟩ₖ ∈ initSegIsoRel R X S Y :=
+      (kpair_mem_initSegIsoRel_swap_iff.mpr hy₁x₁_sw)
+    rcases initSegIsoRel_exists_lt_of_lt (R := R) (X := X) (S := S) (Y := Y)
+        hRwo.1 hSwo.1 hx₁m hmy₁ with ⟨z, hzy₁, hx₁z⟩
+    have hzY : z ∈ Y := (kpair_mem_initSegIsoRel_iff.mp hx₁z).2.1
+    have hz_ne_y₁ : z ≠ y₁ := by
+      intro hzEq
+      subst hzEq
+      exact hSwo.1.irrefl hy₁Y hzy₁
+    have hx₁X : x₁ ∈ X := by
+      exact (show x₁ ∈ X ∧ m ∈ X by simpa [mem_prod_iff] using hRwo.1.subset_prod _ hx₁m).1
+    have hx₁A : x₁ ∈ A := mem_sep_iff.mpr ⟨hx₁X, z, y₁, hx₁z, hx₁y₁, hz_ne_y₁⟩
+    have hleast_x₁ : x₁ = m ∨ ⟨m, x₁⟩ₖ ∈ R := hmLeast x₁ hx₁A
+    rcases hleast_x₁ with (hx₁mEq | hmx₁)
+    · subst hx₁mEq
+      exact hRwo.1.irrefl hmX hx₁m
+    · exact (hRwo.1.asymm hmX hx₁X hmx₁ hx₁m).elim
+  · exact hyne hEq
+  · have hy₁m_sw : ⟨y₁, m⟩ₖ ∈ initSegIsoRel S Y R X :=
+      (kpair_mem_initSegIsoRel_swap_iff.mp hmy₁)
+    rcases initSegIsoRel_exists_lt_of_lt (R := S) (X := Y) (S := R) (Y := X)
+        hSwo.1 hRwo.1 hy₂₁ hy₁m_sw with ⟨x₂, hx₂m, hy₂x₂_sw⟩
+    have hx₂y₂ : ⟨x₂, y₂⟩ₖ ∈ initSegIsoRel R X S Y :=
+      (kpair_mem_initSegIsoRel_swap_iff.mpr hy₂x₂_sw)
+    rcases initSegIsoRel_exists_lt_of_lt (R := R) (X := X) (S := S) (Y := Y)
+        hRwo.1 hSwo.1 hx₂m hmy₂ with ⟨z, hzy₂, hx₂z⟩
+    have hzY : z ∈ Y := (kpair_mem_initSegIsoRel_iff.mp hx₂z).2.1
+    have hz_ne_y₂ : z ≠ y₂ := by
+      intro hzEq
+      subst hzEq
+      exact hSwo.1.irrefl hy₂Y hzy₂
+    have hx₂X : x₂ ∈ X := by
+      exact (show x₂ ∈ X ∧ m ∈ X by simpa [mem_prod_iff] using hRwo.1.subset_prod _ hx₂m).1
+    have hx₂A : x₂ ∈ A := mem_sep_iff.mpr ⟨hx₂X, z, y₂, hx₂z, hx₂y₂, hz_ne_y₂⟩
+    have hleast_x₂ : x₂ = m ∨ ⟨m, x₂⟩ₖ ∈ R := hmLeast x₂ hx₂A
+    rcases hleast_x₂ with (hx₂mEq | hmx₂)
+    · subst hx₂mEq
+      exact hRwo.1.irrefl hmX hx₂m
+    · exact (hRwo.1.asymm hmX hx₂X hmx₂ hx₂m).elim
+
+lemma initSegIsoRel_total_unique [V ⊧ₘ* 𝗭𝗙]
+    {R X S Y a : V}
+    (hRwo : IsWellOrderOn R X)
+    (hSwo : IsWellOrderOn S Y)
+    (haD : a ∈ domain (initSegIsoRel R X S Y)) :
+    ∃! b, ⟨a, b⟩ₖ ∈ initSegIsoRel R X S Y := by
+  rcases mem_domain_iff.mp haD with ⟨b, hab⟩
+  refine ⟨b, hab, ?_⟩
+  intro b' hab'
+  exact initSegIsoRel_value_unique hRwo hSwo hab' hab
+
+lemma initSegIsoRel_injective [V ⊧ₘ* 𝗭𝗙]
+    {R X S Y : V}
+    (hRwo : IsWellOrderOn R X)
+    (hSwo : IsWellOrderOn S Y) :
+    Injective (initSegIsoRel R X S Y) := by
+  intro x₁ x₂ y hx₁ hx₂
+  have hyx₁ : ⟨y, x₁⟩ₖ ∈ initSegIsoRel S Y R X := (kpair_mem_initSegIsoRel_swap_iff.mp hx₁)
+  have hyx₂ : ⟨y, x₂⟩ₖ ∈ initSegIsoRel S Y R X := (kpair_mem_initSegIsoRel_swap_iff.mp hx₂)
+  exact initSegIsoRel_value_unique hSwo hRwo hyx₁ hyx₂
+
+lemma initSegIsoRel_isOrderIso_domain_range [V ⊧ₘ* 𝗭𝗙]
+    {R X S Y : V}
+    (hRwo : IsWellOrderOn R X)
+    (hSwo : IsWellOrderOn S Y) :
+    IsOrderIso R (domain (initSegIsoRel R X S Y)) S (range (initSegIsoRel R X S Y))
+      (initSegIsoRel R X S Y) := by
+  let F : V := initSegIsoRel R X S Y
+  have hFfun : F ∈ range F ^ domain F := by
+    apply mem_function.intro
+    · intro p hp
+      rcases show ∃ a ∈ X, ∃ b ∈ Y, p = ⟨a, b⟩ₖ from by
+          simpa [mem_prod_iff] using (initSegIsoRel_subset_prod R X S Y p hp) with
+        ⟨a, haX, b, hbY, rfl⟩
+      have hab : ⟨a, b⟩ₖ ∈ F := by simpa [F] using hp
+      have haD : a ∈ domain F := mem_domain_of_kpair_mem hab
+      have hbR : b ∈ range F := mem_range_of_kpair_mem hab
+      simpa [mem_prod_iff] using And.intro haD hbR
+    · intro a haD
+      exact initSegIsoRel_total_unique hRwo hSwo haD
+  have hFinj : Injective F := initSegIsoRel_injective hRwo hSwo
+  have hFrel :
+      ∀ a₁ ∈ domain F, ∀ a₂ ∈ domain F, ⟨a₁, a₂⟩ₖ ∈ R ↔ ⟨F ‘ a₁, F ‘ a₂⟩ₖ ∈ S := by
+    intro a₁ ha₁D a₂ ha₂D
+    rcases exists_of_mem_function hFfun a₁ ha₁D with ⟨b₁, hb₁R, ha₁b₁⟩
+    rcases exists_of_mem_function hFfun a₂ ha₂D with ⟨b₂, hb₂R, ha₂b₂⟩
+    have hb₁val : F ‘ a₁ = b₁ := value_eq_of_kpair_mem hFfun ha₁b₁
+    have hb₂val : F ‘ a₂ = b₂ := value_eq_of_kpair_mem hFfun ha₂b₂
+    have hforward : ⟨a₁, a₂⟩ₖ ∈ R → ⟨b₁, b₂⟩ₖ ∈ S := by
+      intro ha₁₂
+      rcases initSegIsoRel_exists_lt_of_lt (R := R) (X := X) (S := S) (Y := Y)
+          hRwo.1 hSwo.1 ha₁₂ ha₂b₂ with ⟨b₁', hb₁'b₂, ha₁b₁'⟩
+      have hb₁'eq : b₁' = b₁ := initSegIsoRel_value_unique hRwo hSwo ha₁b₁' ha₁b₁
+      simpa [hb₁'eq] using hb₁'b₂
+    have hback : ⟨b₁, b₂⟩ₖ ∈ S → ⟨a₁, a₂⟩ₖ ∈ R := by
+      intro hb₁₂
+      have hb₂a₂_sw : ⟨b₂, a₂⟩ₖ ∈ initSegIsoRel S Y R X :=
+        (kpair_mem_initSegIsoRel_swap_iff.mp ha₂b₂)
+      rcases initSegIsoRel_exists_lt_of_lt (R := S) (X := Y) (S := R) (Y := X)
+          hSwo.1 hRwo.1 hb₁₂ hb₂a₂_sw with ⟨a₁', ha₁'a₂, hb₁a₁'_sw⟩
+      have ha₁'b₁ : ⟨a₁', b₁⟩ₖ ∈ F := (kpair_mem_initSegIsoRel_swap_iff.mpr hb₁a₁'_sw)
+      have ha₁'eq : a₁' = a₁ := hFinj _ _ _ ha₁'b₁ ha₁b₁
+      simpa [ha₁'eq] using ha₁'a₂
+    have hiff : ⟨a₁, a₂⟩ₖ ∈ R ↔ ⟨b₁, b₂⟩ₖ ∈ S := ⟨hforward, hback⟩
+    simpa [hb₁val, hb₂val] using hiff
+  exact ⟨hFfun, hFinj, rfl, hFrel⟩
+
+lemma initSegIsoRel_not_iso_between_initialSegments_of_outside
+    {R X S Y a₀ b₀ : V}
+    (ha₀X : a₀ ∈ X)
+    (hb₀Y : b₀ ∈ Y)
+    (ha₀nD : a₀ ∉ domain (initSegIsoRel R X S Y)) :
+    ¬ IsOrderIso R (initialSegment R X a₀) S (initialSegment S Y b₀) (initSegIsoRel R X S Y) := by
+  intro hIso
+  have hInit : InitSegIso R X S Y a₀ b₀ := ⟨initSegIsoRel R X S Y, hIso⟩
+  have hab : ⟨a₀, b₀⟩ₖ ∈ initSegIsoRel R X S Y :=
+    kpair_mem_initSegIsoRel_iff.mpr ⟨ha₀X, hb₀Y, hInit⟩
+  have ha₀D : a₀ ∈ domain (initSegIsoRel R X S Y) := mem_domain_of_kpair_mem hab
+  have hb₀R : b₀ ∈ range (initSegIsoRel R X S Y) := mem_range_of_kpair_mem hab
+  exact (ha₀nD ha₀D).elim
+
+lemma initSegIsoRel_not_both_proper_initialSegments [V ⊧ₘ* 𝗭𝗙]
+    {R X S Y a₀ b₀ : V}
+    (hRwo : IsWellOrderOn R X)
+    (hSwo : IsWellOrderOn S Y)
+    (ha₀X : a₀ ∈ X)
+    (hb₀Y : b₀ ∈ Y)
+    (hDom : domain (initSegIsoRel R X S Y) = initialSegment R X a₀)
+    (hRan : range (initSegIsoRel R X S Y) = initialSegment S Y b₀) :
+    False := by
+  have hIsoDR := initSegIsoRel_isOrderIso_domain_range hRwo hSwo
+  have ha₀nD : a₀ ∉ domain (initSegIsoRel R X S Y) := by
+    rw [hDom]
+    intro ha₀
+    exact hRwo.1.irrefl ha₀X (mem_initialSegment_iff.mp ha₀).2
+  have hIsoSeg : IsOrderIso R (initialSegment R X a₀) S (initialSegment S Y b₀)
+      (initSegIsoRel R X S Y) := by
+    simpa [hDom, hRan] using hIsoDR
+  exact initSegIsoRel_not_iso_between_initialSegments_of_outside
+    ha₀X hb₀Y ha₀nD hIsoSeg
+
+lemma wellOrder_comparable_by_initSegIsoRel [V ⊧ₘ* 𝗭𝗙]
+    {R X S Y : V}
+    (hRwo : IsWellOrderOn R X)
+    (hSwo : IsWellOrderOn S Y) :
+    IsOrderIso R X S Y (initSegIsoRel R X S Y) ∨
+      (∃ a₀, a₀ ∈ X ∧
+        IsOrderIso R (initialSegment R X a₀) S Y (initSegIsoRel R X S Y)) ∨
+      (∃ b₀, b₀ ∈ Y ∧
+        IsOrderIso R X S (initialSegment S Y b₀) (initSegIsoRel R X S Y)) := by
+  have hIsoDR := initSegIsoRel_isOrderIso_domain_range hRwo hSwo
+  rcases domain_initSegIsoRel_eq_or_eq_initialSegment_of_least_not_mem
+      (R := R) (X := X) (S := S) (Y := Y) hRwo hSwo.1 with
+    hDomFull | ⟨a₀, ha₀X, ha₀nD, hDomSeg⟩
+  · rcases range_initSegIsoRel_eq_or_eq_initialSegment_of_least_not_mem
+      (R := R) (X := X) (S := S) (Y := Y) hRwo.1 hSwo with
+      hRanFull | ⟨b₀, hb₀Y, hb₀nR, hRanSeg⟩
+    · left
+      simpa [hDomFull, hRanFull] using hIsoDR
+    · right
+      right
+      refine ⟨b₀, hb₀Y, ?_⟩
+      simpa [hDomFull, hRanSeg] using hIsoDR
+  · rcases range_initSegIsoRel_eq_or_eq_initialSegment_of_least_not_mem
+      (R := R) (X := X) (S := S) (Y := Y) hRwo.1 hSwo with
+      hRanFull | ⟨b₀, hb₀Y, hb₀nR, hRanSeg⟩
+    · right
+      left
+      refine ⟨a₀, ha₀X, ?_⟩
+      simpa [hDomSeg, hRanFull] using hIsoDR
+    · exact (initSegIsoRel_not_both_proper_initialSegments
+        (R := R) (X := X) (S := S) (Y := Y)
+        hRwo hSwo ha₀X hb₀Y hDomSeg hRanSeg).elim
 
 /-! ### Cardinality comparison -/
 
