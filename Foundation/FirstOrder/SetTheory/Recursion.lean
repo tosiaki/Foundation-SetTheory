@@ -2,6 +2,8 @@ module
 
 public import Foundation.FirstOrder.SetTheory.Ordinal
 
+@[expose] public section
+
 namespace LO.FirstOrder.SetTheory
 
 variable {V : Type*} [SetStructure V] [Nonempty V] [V ⊧ₘ* 𝗭]
@@ -1148,6 +1150,21 @@ lemma transfinite_recursion_value_existsUnique_var
     definability
   simpa using
     transfinite_recursion_value_existsUnique_of_definableFunction (F := Φ a) hFdef α hα
+
+lemma succLimitRecursionStep_zero_transfiniteRecursionValueFn
+    [V ⊧ₘ* 𝗭𝗙]
+    (a₀ : V) (F : V → V) (hFdef : ℒₛₑₜ-function₁[V] F) :
+    transfiniteRecursionValueFn (SuccLimitRecursionStep a₀ F) 0 = a₀ := by
+  let G : V → V := SuccLimitRecursionStep a₀ F
+  have hGdef : ℒₛₑₜ-function₁[V] G := succLimitRecursionStep_definable a₀ F hFdef
+  unfold transfiniteRecursionValueFn
+  have hrf : IsRecursionFunctionGraph G 0 (recursionFunctionOrDefault G 0) := by
+    let αo : Ordinal V := IsOrdinal.toOrdinal 0
+    simpa [αo] using recursionFunctionOrDefault_notDefaultBranch_on (F := G) hGdef αo
+  have hdom0 : domain (recursionFunctionOrDefault G 0) = (0 : V) := hrf.2.1
+  have hdomEmpty : domain (recursionFunctionOrDefault G 0) = (∅ : V) := by
+    simpa [zero_def] using hdom0
+  simp [G, SuccLimitRecursionStep, hdomEmpty]
 
 lemma succLimitRecursionStep_successor_transfiniteRecursionValueFn
     [V ⊧ₘ* 𝗭𝗙]

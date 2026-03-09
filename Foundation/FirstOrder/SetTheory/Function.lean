@@ -675,6 +675,31 @@ instance image.defined : ℒₛₑₜ-function₂[V] image via image.dfn :=
 
 instance image.definable : ℒₛₑₜ-function₂[V] image := image.defined.to_definable
 
+lemma mem_image_iff {R A y : V} :
+    y ∈ R “ A ↔ ∃ x ∈ A, ⟨x, y⟩ₖ ∈ R := by
+  simp only [image, mem_range_iff, kpair_mem_restrict_iff]
+  constructor
+  · rintro ⟨x, hx, hxA⟩; exact ⟨x, hxA, hx⟩
+  · rintro ⟨x, hxA, hx⟩; exact ⟨x, hx, hxA⟩
+
+lemma mem_image_of_kpair_mem {R A x y : V}
+    (hx : x ∈ A) (hxy : ⟨x, y⟩ₖ ∈ R) :
+    y ∈ R “ A :=
+  mem_image_iff.mpr ⟨x, hx, hxy⟩
+
+lemma image_subset_of_mem_function {f X Y A : V}
+    (hf : f ∈ Y ^ X) :
+    (f “ A) ⊆ Y := by
+  intro y hy
+  rcases mem_image_iff.mp hy with ⟨x, -, hxy⟩
+  exact (mem_of_mem_functions hf hxy).2
+
+lemma image_mono {R A B : V} (hAB : A ⊆ B) :
+    (R “ A) ⊆ R “ B := by
+  intro y hy
+  rcases mem_image_iff.mp hy with ⟨x, hxA, hxy⟩
+  exact mem_image_iff.mpr ⟨x, hAB x hxA, hxy⟩
+
 /--
 If `F` is definable and maps `X` into `Y`, then separation on `X ×ˢ Y`
 produces a set-theoretic function graph representing `F` on `X`.
@@ -2453,6 +2478,58 @@ instance CardEQ.defined : ℒₛₑₜ-relation[V] CardEQ via dfn := ⟨fun v �
 
 instance CardEQ.definable : ℒₛₑₜ-relation[V] CardEQ := defined.to_definable
 
+def Bijective (f X Y : V) : Prop := f ∈ Y ^ X ∧ Injective f ∧ range f = Y
+
+def Bijective.dfn : Semisentence ℒₛₑₜ 3 :=
+  f“f X Y. f ∈ !function.dfn Y X ∧ !Injective.dfn f ∧ !range.dfn f = Y”
+
+instance Bijective.defined : ℒₛₑₜ-relation₃[V] Bijective via dfn :=
+  ⟨fun v ↦ by simp [Bijective, dfn]⟩
+
+instance Bijective.definable : ℒₛₑₜ-relation₃[V] Bijective := defined.to_definable
+
+lemma Bijective.mem_function {f X Y : V} (h : Bijective f X Y) : f ∈ Y ^ X := h.1
+
+lemma Bijective.injective {f X Y : V} (h : Bijective f X Y) : Injective f := h.2.1
+
+lemma Bijective.range_eq {f X Y : V} (h : Bijective f X Y) : range f = Y := h.2.2
+
+lemma compose_range_eq_of_range_eq {X Y Z f g : V}
+    (hf : f ∈ Y ^ X) (hg : g ∈ Z ^ Y)
+    (hfRange : range f = Y) (hgRange : range g = Z) :
+    range (compose f g) = Z := by
+  apply subset_antisymm
+  · exact range_subset_of_mem_function (compose_function hf hg)
+  · intro z hzZ
+    rw [← hgRange] at hzZ
+    rcases mem_range_iff.mp hzZ with ⟨y, hyz⟩
+    have hyY : y ∈ Y := (mem_of_mem_functions hg hyz).1
+    have hyRf : y ∈ range f := by simpa [hfRange] using hyY
+    rcases mem_range_iff.mp hyRf with ⟨x, hxy⟩
+    exact mem_range_iff.mpr ⟨x, kpair_mem_compose_iff.mpr ⟨y, hxy, hyz⟩⟩
+
+lemma Bijective.comp {f X Y g Z : V}
+    (hf : Bijective f X Y) (hg : Bijective g Y Z) :
+    Bijective (compose f g) X Z := by
+  exact ⟨compose_function hf.mem_function hg.mem_function,
+    compose_injective hf.injective hg.injective,
+    compose_range_eq_of_range_eq hf.mem_function hg.mem_function hf.range_eq hg.range_eq⟩
+
+lemma Bijective.symm {f X Y : V} (h : Bijective f X Y) :
+    Bijective (inverse f) Y X := by
+  have hInv : inverse f ∈ X ^ range f :=
+    inverse_mem_function_of_mem_function_of_injective h.mem_function h.injective
+  refine ⟨by simpa [h.range_eq] using hInv,
+    inverse_injective_of_mem_function h.mem_function, ?_⟩
+  simp [domain_eq_of_mem_function h.mem_function, range_inverse f]
+
+namespace IsOrderIso
+
+lemma bijective {R X S Y f : V} (h : IsOrderIso R X S Y f) : Bijective f X Y :=
+  ⟨h.mem_function, h.injective, h.range_eq⟩
+
+end IsOrderIso
+
 lemma CardEQ.le {X Y : V} (h : X ≋ Y) : X ≤# Y := h.1
 
 lemma CardEQ.ge {X Y : V} (h : X ≋ Y) : Y ≤# X := h.2
@@ -2463,6 +2540,17 @@ lemma CardEQ.ge {X Y : V} (h : X ≋ Y) : Y ≤# X := h.2
 
 @[trans] lemma CardEQ.trans {X Y Z : V} : X ≋ Y → Y ≋ Z → X ≋ Z := fun eXY eYZ ↦
   ⟨eXY.le.trans eYZ.le, eYZ.ge.trans eXY.ge⟩
+
+lemma CardEQ.of_bijective {f X Y : V} (h : Bijective f X Y) : X ≋ Y := by
+  refine ⟨⟨f, h.mem_function, h.injective⟩, ?_⟩
+  refine ⟨inverse f, ?_, inverse_injective_of_mem_function h.mem_function⟩
+  simpa [h.range_eq] using
+    inverse_mem_function_of_mem_function_of_injective h.mem_function h.injective
+
+lemma cardEQ_of_exists_bijective {X Y : V} :
+    (∃ f, Bijective f X Y) → X ≋ Y := by
+  rintro ⟨f, hf⟩
+  exact CardEQ.of_bijective hf
 
 lemma cardLT_power (X : V) : X <# ℘ X := by
   have : X ≤# ℘ X := by
