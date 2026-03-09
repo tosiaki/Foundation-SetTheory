@@ -581,6 +581,9 @@ lemma prod_subset_prod_of_subset {X₁ X₂ Y₁ Y₂ : V} (hX : X₁ ⊆ X₂) 
 lemma union_prod (x y z : V) : (x ∪ y) ×ˢ z = (x ×ˢ z) ∪ (y ×ˢ z) := by
   ext v; simp only [mem_prod_iff, mem_union_iff]; grind
 
+lemma prod_union (x y z : V) : x ×ˢ (y ∪ z) = (x ×ˢ y) ∪ (x ×ˢ z) := by
+  ext v; simp only [mem_prod_iff, mem_union_iff]; grind
+
 @[simp] lemma singleton_prod_singleton (x y : V) : ({x} ×ˢ {y} : V) = {⟨x, y⟩ₖ} := by
   ext z; simp [mem_prod_iff]
 

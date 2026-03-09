@@ -1239,6 +1239,826 @@ lemma strictIncreasing_function_subset_value
   · simp [hEq]
   · exact (IsOrdinal.subset_iff (α := α) (β := F α)).2 (Or.inr hαFα)
 
+noncomputable def ordinalMax (α β : V) : V := α ∪ β
+
+instance ordinalMax.definable : ℒₛₑₜ-function₂[V] ordinalMax := by
+  simpa [ordinalMax] using (union.definable (V := V) : ℒₛₑₜ-function₂[V] Union.union)
+
+lemma ordinalMax_isOrdinal {α β : V} (hα : IsOrdinal α) (hβ : IsOrdinal β) :
+    IsOrdinal (ordinalMax α β) := by
+  rcases IsOrdinal.subset_or_supset (α := α) (β := β) with (hαβ | hβα)
+  · have : ordinalMax α β = β := by
+      exact union_eq_iff_left.mpr hαβ
+    simpa [this] using hβ
+  · have : ordinalMax α β = α := by
+      exact union_eq_iff_right.mpr hβα
+    simpa [this] using hα
+
+def IsOrdinalPair (p : V) : Prop :=
+  ∃ α β : V, p = ⟨α, β⟩ₖ ∧ IsOrdinal α ∧ IsOrdinal β
+
+instance IsOrdinalPair.definable : ℒₛₑₜ-predicate[V] IsOrdinalPair := by
+  letI : ℒₛₑₜ-function₂[V] kpair := kpair.definable
+  letI : ℒₛₑₜ-predicate[V] IsOrdinal := IsOrdinal.definable
+  unfold IsOrdinalPair
+  definability
+
+namespace IsOrdinalPair
+
+lemma mk {α β : V} (hα : IsOrdinal α) (hβ : IsOrdinal β) :
+    IsOrdinalPair ⟨α, β⟩ₖ := ⟨α, β, rfl, hα, hβ⟩
+
+lemma fst {p : V} (hp : IsOrdinalPair p) : IsOrdinal (kpair.π₁ p) := by
+  rcases hp with ⟨α, β, rfl, hα, hβ⟩
+  simpa using hα
+
+lemma snd {p : V} (hp : IsOrdinalPair p) : IsOrdinal (kpair.π₂ p) := by
+  rcases hp with ⟨α, β, rfl, hα, hβ⟩
+  simpa using hβ
+
+lemma eq_kpair_proj {p : V} (hp : IsOrdinalPair p) :
+    p = ⟨kpair.π₁ p, kpair.π₂ p⟩ₖ := by
+  rcases hp with ⟨α, β, rfl, hα, hβ⟩
+  simp
+
+lemma max_isOrdinal {p : V} (hp : IsOrdinalPair p) :
+    IsOrdinal (ordinalMax (kpair.π₁ p) (kpair.π₂ p)) :=
+  ordinalMax_isOrdinal hp.fst hp.snd
+
+end IsOrdinalPair
+
+def OrdinalLex2 (α₁ β₁ α₂ β₂ : V) : Prop :=
+  α₁ ∈ α₂ ∨ (α₁ = α₂ ∧ β₁ ∈ β₂)
+
+def OrdinalLex3 (α₁ β₁ γ₁ α₂ β₂ γ₂ : V) : Prop :=
+  α₁ ∈ α₂ ∨ (α₁ = α₂ ∧ OrdinalLex2 β₁ γ₁ β₂ γ₂)
+
+private lemma ordinalLex2_irrefl {α β : V} :
+    ¬ OrdinalLex2 α β α β := by
+  intro h
+  rcases h with h | ⟨hEq, hββ⟩
+  · exact (mem_irrefl α h).elim
+  · exact (mem_irrefl β hββ).elim
+
+omit [Nonempty V] [V ⊧ₘ* 𝗭] in
+private lemma ordinalLex2_trans
+    {α₁ β₁ α₂ β₂ α₃ β₃ : V}
+    (hα₃ : IsOrdinal α₃) (hβ₃ : IsOrdinal β₃)
+    (h₁₂ : OrdinalLex2 α₁ β₁ α₂ β₂)
+    (h₂₃ : OrdinalLex2 α₂ β₂ α₃ β₃) :
+    OrdinalLex2 α₁ β₁ α₃ β₃ := by
+  rcases h₁₂ with hα₁₂ | ⟨hαEq, hβ₁₂⟩
+  · rcases h₂₃ with hα₂₃ | ⟨hαEq', hβ₂₃⟩
+    · exact Or.inl <| hα₃.toIsTransitive.transitive _ hα₂₃ _ hα₁₂
+    · exact Or.inl <| by simpa [hαEq'] using hα₁₂
+  · rcases h₂₃ with hα₂₃ | ⟨hαEq', hβ₂₃⟩
+    · exact Or.inl <| by simpa [hαEq] using hα₂₃
+    · refine Or.inr ?_
+      refine ⟨hαEq.trans hαEq', ?_⟩
+      exact hβ₃.toIsTransitive.transitive _ hβ₂₃ _ hβ₁₂
+
+private lemma ordinalLex2_trichotomy
+    {α₁ β₁ α₂ β₂ : V}
+    (hα₁ : IsOrdinal α₁) (hβ₁ : IsOrdinal β₁)
+    (hα₂ : IsOrdinal α₂) (hβ₂ : IsOrdinal β₂) :
+    OrdinalLex2 α₁ β₁ α₂ β₂ ∨
+      (α₁ = α₂ ∧ β₁ = β₂) ∨
+      OrdinalLex2 α₂ β₂ α₁ β₁ := by
+  rcases IsOrdinal.mem_trichotomy (α := α₁) (β := α₂) with (hα₁₂ | hαEq | hα₂₁)
+  · exact Or.inl <| Or.inl hα₁₂
+  · rcases IsOrdinal.mem_trichotomy (α := β₁) (β := β₂) with (hβ₁₂ | hβEq | hβ₂₁)
+    · exact Or.inl <| Or.inr ⟨hαEq, hβ₁₂⟩
+    · exact Or.inr <| Or.inl ⟨hαEq, hβEq⟩
+    · exact Or.inr <| Or.inr <| Or.inr ⟨hαEq.symm, hβ₂₁⟩
+  · exact Or.inr <| Or.inr <| Or.inl hα₂₁
+
+private lemma ordinalLex3_irrefl {α β γ : V} :
+    ¬ OrdinalLex3 α β γ α β γ := by
+  intro h
+  rcases h with h | ⟨hEq, hrest⟩
+  · exact (mem_irrefl α h).elim
+  · exact ordinalLex2_irrefl hrest
+
+omit [Nonempty V] [V ⊧ₘ* 𝗭] in
+private lemma ordinalLex3_trans
+    {α₁ β₁ γ₁ α₂ β₂ γ₂ α₃ β₃ γ₃ : V}
+    (hα₃ : IsOrdinal α₃) (hβ₃ : IsOrdinal β₃) (hγ₃ : IsOrdinal γ₃)
+    (h₁₂ : OrdinalLex3 α₁ β₁ γ₁ α₂ β₂ γ₂)
+    (h₂₃ : OrdinalLex3 α₂ β₂ γ₂ α₃ β₃ γ₃) :
+    OrdinalLex3 α₁ β₁ γ₁ α₃ β₃ γ₃ := by
+  rcases h₁₂ with hα₁₂ | ⟨hαEq, hrest₁₂⟩
+  · rcases h₂₃ with hα₂₃ | ⟨hαEq', hrest₂₃⟩
+    · exact Or.inl <| hα₃.toIsTransitive.transitive _ hα₂₃ _ hα₁₂
+    · exact Or.inl <| by simpa [hαEq'] using hα₁₂
+  · rcases h₂₃ with hα₂₃ | ⟨hαEq', hrest₂₃⟩
+    · exact Or.inl <| by simpa [hαEq] using hα₂₃
+    · refine Or.inr ?_
+      refine ⟨hαEq.trans hαEq', ?_⟩
+      exact ordinalLex2_trans hβ₃ hγ₃ hrest₁₂ hrest₂₃
+
+private lemma ordinalLex3_trichotomy
+    {α₁ β₁ γ₁ α₂ β₂ γ₂ : V}
+    (hα₁ : IsOrdinal α₁) (hβ₁ : IsOrdinal β₁) (hγ₁ : IsOrdinal γ₁)
+    (hα₂ : IsOrdinal α₂) (hβ₂ : IsOrdinal β₂) (hγ₂ : IsOrdinal γ₂) :
+    OrdinalLex3 α₁ β₁ γ₁ α₂ β₂ γ₂ ∨
+      (β₁ = β₂ ∧ γ₁ = γ₂) ∨
+      OrdinalLex3 α₂ β₂ γ₂ α₁ β₁ γ₁ := by
+  rcases IsOrdinal.mem_trichotomy (α := α₁) (β := α₂) with (hα₁₂ | hαEq | hα₂₁)
+  · exact Or.inl <| Or.inl hα₁₂
+  · rcases ordinalLex2_trichotomy hβ₁ hγ₁ hβ₂ hγ₂ with (hrest | hEq | hrest)
+    · exact Or.inl <| Or.inr ⟨hαEq, hrest⟩
+    · exact Or.inr <| Or.inl hEq
+    · exact Or.inr <| Or.inr <| Or.inr ⟨hαEq.symm, hrest⟩
+  · exact Or.inr <| Or.inr <| Or.inl hα₂₁
+
+def OrdinalPairLT (p q : V) : Prop :=
+  IsOrdinalPair p ∧ IsOrdinalPair q ∧
+    OrdinalLex3
+      (ordinalMax (kpair.π₁ p) (kpair.π₂ p)) (kpair.π₁ p) (kpair.π₂ p)
+      (ordinalMax (kpair.π₁ q) (kpair.π₂ q)) (kpair.π₁ q) (kpair.π₂ q)
+
+instance OrdinalPairLT.definable : ℒₛₑₜ-relation[V] OrdinalPairLT := by
+  letI : ℒₛₑₜ-predicate[V] IsOrdinalPair := IsOrdinalPair.definable
+  letI : ℒₛₑₜ-function₂[V] ordinalMax := ordinalMax.definable (V := V)
+  letI : ℒₛₑₜ-function₁[V] kpair.π₁ := kpair.π₁.definable
+  letI : ℒₛₑₜ-function₁[V] kpair.π₂ := kpair.π₂.definable
+  unfold OrdinalPairLT OrdinalLex3 OrdinalLex2
+  definability
+
+private lemma ordinalPairLT_kpair_iff_of_ordinals
+    {α₁ β₁ α₂ β₂ : V}
+    (hα₁ : IsOrdinal α₁) (hβ₁ : IsOrdinal β₁)
+    (hα₂ : IsOrdinal α₂) (hβ₂ : IsOrdinal β₂) :
+    OrdinalPairLT ⟨α₁, β₁⟩ₖ ⟨α₂, β₂⟩ₖ ↔
+      OrdinalLex3
+        (ordinalMax α₁ β₁) α₁ β₁
+        (ordinalMax α₂ β₂) α₂ β₂ := by
+  simp [OrdinalPairLT, IsOrdinalPair, OrdinalLex3, OrdinalLex2, hα₁, hβ₁, hα₂, hβ₂]
+
+lemma ordinalPairLT_irrefl {p : V} (hp : IsOrdinalPair p) : ¬ OrdinalPairLT p p := by
+  rcases hp with ⟨α, β, rfl, hα, hβ⟩
+  have hμ : IsOrdinal (ordinalMax α β) := ordinalMax_isOrdinal hα hβ
+  rw [ordinalPairLT_kpair_iff_of_ordinals hα hβ hα hβ]
+  exact ordinalLex3_irrefl
+
+lemma ordinalPairLT_trans {p q r : V}
+    (hp : IsOrdinalPair p) (hq : IsOrdinalPair q) (hr : IsOrdinalPair r)
+    (hpq : OrdinalPairLT p q) (hqr : OrdinalPairLT q r) :
+    OrdinalPairLT p r := by
+  rcases hp with ⟨α₁, β₁, rfl, hα₁, hβ₁⟩
+  rcases hq with ⟨α₂, β₂, rfl, hα₂, hβ₂⟩
+  rcases hr with ⟨α₃, β₃, rfl, hα₃, hβ₃⟩
+  have hμ₁ : IsOrdinal (ordinalMax α₁ β₁) := ordinalMax_isOrdinal hα₁ hβ₁
+  have hμ₂ : IsOrdinal (ordinalMax α₂ β₂) := ordinalMax_isOrdinal hα₂ hβ₂
+  have hμ₃ : IsOrdinal (ordinalMax α₃ β₃) := ordinalMax_isOrdinal hα₃ hβ₃
+  rw [ordinalPairLT_kpair_iff_of_ordinals hα₁ hβ₁ hα₃ hβ₃]
+  rw [ordinalPairLT_kpair_iff_of_ordinals hα₁ hβ₁ hα₂ hβ₂] at hpq
+  rw [ordinalPairLT_kpair_iff_of_ordinals hα₂ hβ₂ hα₃ hβ₃] at hqr
+  exact ordinalLex3_trans hμ₃ hα₃ hβ₃ hpq hqr
+
+lemma ordinalPairLT_trichotomy {p q : V}
+    (hp : IsOrdinalPair p) (hq : IsOrdinalPair q) :
+    OrdinalPairLT p q ∨ p = q ∨ OrdinalPairLT q p := by
+  rcases hp with ⟨α₁, β₁, rfl, hα₁, hβ₁⟩
+  rcases hq with ⟨α₂, β₂, rfl, hα₂, hβ₂⟩
+  have hμ₁ : IsOrdinal (ordinalMax α₁ β₁) := ordinalMax_isOrdinal hα₁ hβ₁
+  have hμ₂ : IsOrdinal (ordinalMax α₂ β₂) := ordinalMax_isOrdinal hα₂ hβ₂
+  rcases ordinalLex3_trichotomy hμ₁ hα₁ hβ₁ hμ₂ hα₂ hβ₂ with (h | hEq | h)
+  · left
+    exact (ordinalPairLT_kpair_iff_of_ordinals hα₁ hβ₁ hα₂ hβ₂).2 h
+  · rcases hEq with ⟨hαEq, hβEq⟩
+    right
+    left
+    simpa [kpair_iff] using And.intro hαEq hβEq
+  · right
+    right
+    exact (ordinalPairLT_kpair_iff_of_ordinals hα₂ hβ₂ hα₁ hβ₁).2 h
+
+lemma exists_least_ordinalPairLT_of_ne_empty {A : V}
+    (hA : ∀ p ∈ A, IsOrdinalPair p) (hAne : A ≠ ∅) :
+    ∃ m, m ∈ A ∧ ∀ p ∈ A, p = m ∨ OrdinalPairLT m p := by
+  let MaxProp : V → Prop := fun μ ↦
+    ∃ p ∈ A, ordinalMax (kpair.π₁ p) (kpair.π₂ p) = μ
+  have hMaxProp : ℒₛₑₜ-predicate[V] MaxProp := by
+    letI : ℒₛₑₜ-function₂[V] ordinalMax := ordinalMax.definable (V := V)
+    letI : ℒₛₑₜ-function₁[V] kpair.π₁ := kpair.π₁.definable
+    letI : ℒₛₑₜ-function₁[V] kpair.π₂ := kpair.π₂.definable
+    change ℒₛₑₜ-predicate[V] (fun μ ↦
+      ∃ p ∈ A, ordinalMax (kpair.π₁ p) (kpair.π₂ p) = μ)
+    definability
+  have hMaxExists : ∃ μ : V, IsOrdinal μ ∧ MaxProp μ := by
+    rcases ne_empty_iff_isNonempty.mp hAne with ⟨p, hpA⟩
+    have hpOrd : IsOrdinalPair p := hA p hpA
+    exact ⟨ordinalMax (kpair.π₁ p) (kpair.π₂ p), hpOrd.max_isOrdinal, ⟨p, hpA, rfl⟩⟩
+  rcases exists_least_ordinal_of_exists (P := MaxProp) hMaxProp hMaxExists with
+    ⟨μ, hμord, hμProp, hμleast⟩
+  let FstProp : V → Prop := fun α ↦
+    ∃ p ∈ A, ordinalMax (kpair.π₁ p) (kpair.π₂ p) = μ ∧ kpair.π₁ p = α
+  have hFstProp : ℒₛₑₜ-predicate[V] FstProp := by
+    letI : ℒₛₑₜ-function₂[V] ordinalMax := ordinalMax.definable (V := V)
+    letI : ℒₛₑₜ-function₁[V] kpair.π₁ := kpair.π₁.definable
+    letI : ℒₛₑₜ-function₁[V] kpair.π₂ := kpair.π₂.definable
+    change ℒₛₑₜ-predicate[V] (fun α ↦
+      ∃ p ∈ A, ordinalMax (kpair.π₁ p) (kpair.π₂ p) = μ ∧ kpair.π₁ p = α)
+    definability
+  have hFstExists : ∃ α : V, IsOrdinal α ∧ FstProp α := by
+    rcases hμProp with ⟨p, hpA, hpμ⟩
+    have hpOrd : IsOrdinalPair p := hA p hpA
+    exact ⟨kpair.π₁ p, hpOrd.fst, ⟨p, hpA, hpμ, rfl⟩⟩
+  rcases exists_least_ordinal_of_exists (P := FstProp) hFstProp hFstExists with
+    ⟨α, hαord, hαProp, hαleast⟩
+  let SndProp : V → Prop := fun β ↦
+    ∃ p ∈ A, ordinalMax (kpair.π₁ p) (kpair.π₂ p) = μ ∧ kpair.π₁ p = α ∧ kpair.π₂ p = β
+  have hSndProp : ℒₛₑₜ-predicate[V] SndProp := by
+    letI : ℒₛₑₜ-function₂[V] ordinalMax := ordinalMax.definable (V := V)
+    letI : ℒₛₑₜ-function₁[V] kpair.π₁ := kpair.π₁.definable
+    letI : ℒₛₑₜ-function₁[V] kpair.π₂ := kpair.π₂.definable
+    change ℒₛₑₜ-predicate[V] (fun β ↦
+      ∃ p ∈ A, ordinalMax (kpair.π₁ p) (kpair.π₂ p) = μ ∧ kpair.π₁ p = α ∧ kpair.π₂ p = β)
+    definability
+  have hSndExists : ∃ β : V, IsOrdinal β ∧ SndProp β := by
+    rcases hαProp with ⟨p, hpA, hpμ, hpα⟩
+    have hpOrd : IsOrdinalPair p := hA p hpA
+    exact ⟨kpair.π₂ p, hpOrd.snd, ⟨p, hpA, hpμ, hpα, rfl⟩⟩
+  rcases exists_least_ordinal_of_exists (P := SndProp) hSndProp hSndExists with
+    ⟨β, hβord, hβProp, hβleast⟩
+  rcases hβProp with ⟨m, hmA, hmμ, hmα, hmβ⟩
+  have hmOrd : IsOrdinalPair m := hA m hmA
+  have hmEq : m = ⟨α, β⟩ₖ := by
+    calc
+      m = ⟨kpair.π₁ m, kpair.π₂ m⟩ₖ := hmOrd.eq_kpair_proj
+      _ = ⟨α, β⟩ₖ := by simp [hmα, hmβ]
+  have hmMax : ordinalMax α β = μ := by
+    simpa [hmα, hmβ] using hmμ
+  refine ⟨m, hmA, ?_⟩
+  intro p hpA
+  have hpOrd : IsOrdinalPair p := hA p hpA
+  have hpEq : p = ⟨kpair.π₁ p, kpair.π₂ p⟩ₖ := hpOrd.eq_kpair_proj
+  have hνord : IsOrdinal (ordinalMax (kpair.π₁ p) (kpair.π₂ p)) := hpOrd.max_isOrdinal
+  have hμsub : μ ⊆ ordinalMax (kpair.π₁ p) (kpair.π₂ p) := by
+    exact hμleast _ hνord ⟨p, hpA, rfl⟩
+  let ν : V := ordinalMax (kpair.π₁ p) (kpair.π₂ p)
+  have hνdef : ν = ordinalMax (kpair.π₁ p) (kpair.π₂ p) := rfl
+  have hνord' : IsOrdinal ν := by simpa [ν] using hνord
+  letI : IsOrdinal μ := hμord
+  letI : IsOrdinal ν := hνord'
+  rcases (IsOrdinal.subset_iff (α := μ) (β := ν)).1 (by simpa [ν] using hμsub) with (hμEq | hμν)
+  · have hαsub : α ⊆ kpair.π₁ p := by
+      have hpμ : ordinalMax (kpair.π₁ p) (kpair.π₂ p) = μ := hνdef.symm.trans hμEq.symm
+      exact hαleast _ hpOrd.fst ⟨p, hpA, hpμ, rfl⟩
+    letI : IsOrdinal α := hαord
+    letI : IsOrdinal (kpair.π₁ p) := hpOrd.fst
+    rcases (IsOrdinal.subset_iff (α := α) (β := kpair.π₁ p)).1 hαsub with (hαEq | hαp)
+    · have hβsub : β ⊆ kpair.π₂ p := by
+        have hpμ : ordinalMax (kpair.π₁ p) (kpair.π₂ p) = μ := hνdef.symm.trans hμEq.symm
+        exact hβleast _ hpOrd.snd ⟨p, hpA, hpμ, hαEq.symm, rfl⟩
+      letI : IsOrdinal β := hβord
+      letI : IsOrdinal (kpair.π₂ p) := hpOrd.snd
+      rcases (IsOrdinal.subset_iff (α := β) (β := kpair.π₂ p)).1 hβsub with (hβEq | hβp)
+      · left
+        calc
+          p = ⟨kpair.π₁ p, kpair.π₂ p⟩ₖ := hpEq
+          _ = ⟨α, β⟩ₖ := by simp [hαEq, hβEq]
+          _ = m := hmEq.symm
+      · right
+        rw [hmEq, hpEq]
+        have hmaxEq : ordinalMax α β = ordinalMax (kpair.π₁ p) (kpair.π₂ p) := by
+          calc
+            ordinalMax α β = μ := hmMax
+            _ = ν := hμEq
+            _ = ordinalMax (kpair.π₁ p) (kpair.π₂ p) := hνdef
+        exact (ordinalPairLT_kpair_iff_of_ordinals hαord hβord hpOrd.fst hpOrd.snd).2 <|
+          Or.inr ⟨hmaxEq, Or.inr ⟨hαEq, hβp⟩⟩
+    · right
+      rw [hmEq, hpEq]
+      have hmaxEq : ordinalMax α β = ordinalMax (kpair.π₁ p) (kpair.π₂ p) := by
+        calc
+          ordinalMax α β = μ := hmMax
+          _ = ν := hμEq
+          _ = ordinalMax (kpair.π₁ p) (kpair.π₂ p) := hνdef
+      exact (ordinalPairLT_kpair_iff_of_ordinals hαord hβord hpOrd.fst hpOrd.snd).2 <|
+        Or.inr ⟨hmaxEq, Or.inl hαp⟩
+  · right
+    rw [hmEq, hpEq]
+    have hmaxp : ordinalMax α β ∈ ordinalMax (kpair.π₁ p) (kpair.π₂ p) := by
+      simpa [hmMax, hνdef] using hμν
+    exact (ordinalPairLT_kpair_iff_of_ordinals hαord hβord hpOrd.fst hpOrd.snd).2 <|
+      Or.inl hmaxp
+
+private lemma fst_mem_succ_ordinalMax {α β : V}
+    (hα : IsOrdinal α) (hβ : IsOrdinal β) :
+    α ∈ succ (ordinalMax α β) := by
+  letI : IsOrdinal α := hα
+  letI : IsOrdinal (ordinalMax α β) := ordinalMax_isOrdinal hα hβ
+  rcases (IsOrdinal.subset_iff (α := α) (β := ordinalMax α β)).1 (by simp [ordinalMax]) with
+    (hEq | hαμ)
+  · simp only [mem_succ_iff]; exact Or.inl hEq
+  · exact mem_succ_iff.mpr <| Or.inr hαμ
+
+private lemma snd_mem_succ_ordinalMax {α β : V}
+    (hα : IsOrdinal α) (hβ : IsOrdinal β) :
+    β ∈ succ (ordinalMax α β) := by
+  letI : IsOrdinal β := hβ
+  letI : IsOrdinal (ordinalMax α β) := ordinalMax_isOrdinal hα hβ
+  rcases (IsOrdinal.subset_iff (α := β) (β := ordinalMax α β)).1 (by simp [ordinalMax]) with
+    (hEq | hβμ)
+  · simp only [mem_succ_iff]; exact Or.inl hEq
+  · exact mem_succ_iff.mpr <| Or.inr hβμ
+
+private lemma ordinalPairLT_mem_prod_succ_max {p q : V}
+    (hp : IsOrdinalPair p) (hqp : OrdinalPairLT q p) :
+    q ∈ succ (ordinalMax (kpair.π₁ p) (kpair.π₂ p)) ×ˢ
+        succ (ordinalMax (kpair.π₁ p) (kpair.π₂ p)) := by
+  rcases hp with ⟨α, β, rfl, hα, hβ⟩
+  have hq : IsOrdinalPair q := hqp.1
+  rcases hq with ⟨γ, δ, rfl, hγ, hδ⟩
+  let μ : V := ordinalMax α β
+  let ν : V := ordinalMax γ δ
+  have hμord : IsOrdinal μ := by simpa [μ] using ordinalMax_isOrdinal hα hβ
+  have hνord : IsOrdinal ν := by simpa [ν] using ordinalMax_isOrdinal hγ hδ
+  have hγνs : γ ∈ succ ν := by simpa [ν] using fst_mem_succ_ordinalMax hγ hδ
+  have hδνs : δ ∈ succ ν := by simpa [ν] using snd_mem_succ_ordinalMax hγ hδ
+  have hqp' : OrdinalLex3 ν γ δ μ α β := by
+    simpa [μ, ν] using (ordinalPairLT_kpair_iff_of_ordinals hγ hδ hα hβ).1 hqp
+  have hγμs : γ ∈ succ μ := by
+    rcases hqp' with hνμ | ⟨hEq, _⟩
+    · have hsuccνsubμ : succ ν ⊆ μ := IsOrdinal.succ_subset_of_mem hνμ
+      exact mem_succ_iff.mpr <| Or.inr (hsuccνsubμ _ hγνs)
+    · simpa [hEq] using hγνs
+  have hδμs : δ ∈ succ μ := by
+    rcases hqp' with hνμ | ⟨hEq, _⟩
+    · have hsuccνsubμ : succ ν ⊆ μ := IsOrdinal.succ_subset_of_mem hνμ
+      exact mem_succ_iff.mpr <| Or.inr (hsuccνsubμ _ hδνs)
+    · simpa [hEq] using hδνs
+  simpa [μ, kpair_mem_iff] using And.intro hγμs hδμs
+
+noncomputable def ordinalPairInitialSegment (p : V) : V :=
+  {q ∈ succ (ordinalMax (kpair.π₁ p) (kpair.π₂ p)) ×ˢ
+      succ (ordinalMax (kpair.π₁ p) (kpair.π₂ p)) ; OrdinalPairLT q p}
+
+lemma mem_ordinalPairInitialSegment_iff {p q : V} :
+    q ∈ ordinalPairInitialSegment p ↔
+      q ∈ succ (ordinalMax (kpair.π₁ p) (kpair.π₂ p)) ×ˢ
+        succ (ordinalMax (kpair.π₁ p) (kpair.π₂ p)) ∧
+      OrdinalPairLT q p := by
+  simp [ordinalPairInitialSegment]
+
+lemma mem_ordinalPairInitialSegment_iff_of_isOrdinalPair {p q : V}
+    (hp : IsOrdinalPair p) :
+    q ∈ ordinalPairInitialSegment p ↔ OrdinalPairLT q p := by
+  constructor
+  · intro hq
+    exact (mem_ordinalPairInitialSegment_iff.mp hq).2
+  · intro hqp
+    exact mem_ordinalPairInitialSegment_iff.mpr ⟨ordinalPairLT_mem_prod_succ_max hp hqp, hqp⟩
+
+private lemma ordinalPairLT_kpair_zero_fst_iff
+    {β γ α : V}
+    (hβ : IsOrdinal β) (hγ : IsOrdinal γ) (hα : IsOrdinal α) :
+    OrdinalPairLT ⟨β, γ⟩ₖ ⟨0, α⟩ₖ ↔ β ∈ α ∧ γ ∈ α := by
+  have h0 : IsOrdinal (0 : V) := by infer_instance
+  have hmax0α : ordinalMax (0 : V) α = α := by
+    simp [ordinalMax, zero_def]
+  rw [ordinalPairLT_kpair_iff_of_ordinals hβ hγ h0 hα]
+  constructor
+  · intro h
+    let μ : V := ordinalMax β γ
+    have hμord : IsOrdinal μ := by simpa [μ] using ordinalMax_isOrdinal hβ hγ
+    have hβμs : β ∈ succ μ := by simpa [μ] using fst_mem_succ_ordinalMax hβ hγ
+    have hγμs : γ ∈ succ μ := by simpa [μ] using snd_mem_succ_ordinalMax hβ hγ
+    have hμα : μ ∈ α := by
+      rcases h with hμα | ⟨hEq, hlex⟩
+      · simpa [hmax0α] using hμα
+      · rcases hlex with hβ0 | ⟨hβ0, hγα⟩
+        · simp [zero_def] at hβ0
+        · have hμγ : μ = γ := by simp [μ, ordinalMax, hβ0, zero_def]
+          have hγαEq : γ = α := by
+            calc
+              γ = μ := hμγ.symm
+              _ = ordinalMax (0 : V) α := hEq
+              _ = α := hmax0α
+          exact ((mem_irrefl α) (hγαEq ▸ hγα)).elim
+    have hsuccμsubα : succ μ ⊆ α := IsOrdinal.succ_subset_of_mem hμα
+    exact ⟨hsuccμsubα _ hβμs, hsuccμsubα _ hγμs⟩
+  · rintro ⟨hβα, hγα⟩
+    rcases IsOrdinal.subset_or_supset (α := β) (β := γ) with (hβγ | hγβ)
+    · have hμγ : ordinalMax β γ = γ := union_eq_iff_left.mpr hβγ
+      exact Or.inl <| by rw [hmax0α, hμγ]; exact hγα
+    · have hμβ : ordinalMax β γ = β := union_eq_iff_right.mpr hγβ
+      exact Or.inl <| by rw [hmax0α, hμβ]; exact hβα
+
+lemma ordinalPairInitialSegment_zero_fst_eq_prod {α : V}
+    (hα : IsOrdinal α) :
+    ordinalPairInitialSegment ⟨0, α⟩ₖ = α ×ˢ α := by
+  have h0 : IsOrdinal (0 : V) := by infer_instance
+  have hp : IsOrdinalPair ⟨0, α⟩ₖ := IsOrdinalPair.mk h0 hα
+  ext q
+  constructor
+  · intro hq
+    have hlt : OrdinalPairLT q ⟨0, α⟩ₖ := (mem_ordinalPairInitialSegment_iff_of_isOrdinalPair hp).mp hq
+    have hqpair : IsOrdinalPair q := hlt.1
+    rcases hqpair with ⟨β, γ, rfl, hβ, hγ⟩
+    simpa [kpair_mem_iff] using
+      (ordinalPairLT_kpair_zero_fst_iff hβ hγ hα).1 hlt
+  · intro hq
+    rcases mem_prod_iff.mp hq with ⟨β, hβα, γ, hγα, rfl⟩
+    have hβ : IsOrdinal β := hα.of_mem hβα
+    have hγ : IsOrdinal γ := hα.of_mem hγα
+    exact (mem_ordinalPairInitialSegment_iff_of_isOrdinalPair hp).2 <|
+      (ordinalPairLT_kpair_zero_fst_iff hβ hγ hα).2 ⟨hβα, hγα⟩
+
+lemma ordinalPairInitialSegment_eq_iff {S p : V} :
+    S = ordinalPairInitialSegment p ↔
+      ∀ q, q ∈ S ↔
+        q ∈ succ (ordinalMax (kpair.π₁ p) (kpair.π₂ p)) ×ˢ
+          succ (ordinalMax (kpair.π₁ p) (kpair.π₂ p)) ∧
+        OrdinalPairLT q p := by
+  constructor
+  · intro h q
+    subst h
+    exact mem_ordinalPairInitialSegment_iff
+  · intro h
+    ext q
+    rw [mem_ordinalPairInitialSegment_iff]
+    exact h q
+
+instance ordinalPairInitialSegment_eq_definable :
+    ℒₛₑₜ-relation[V] (fun S p ↦ S = ordinalPairInitialSegment p) := by
+  let R : V → V → Prop := fun S p ↦
+    ∀ q, q ∈ S ↔
+      q ∈ succ (ordinalMax (kpair.π₁ p) (kpair.π₂ p)) ×ˢ
+        succ (ordinalMax (kpair.π₁ p) (kpair.π₂ p)) ∧
+      OrdinalPairLT q p
+  have hR : ℒₛₑₜ-relation[V] R := by
+    letI : ℒₛₑₜ-function₂[V] ordinalMax := ordinalMax.definable (V := V)
+    letI : ℒₛₑₜ-function₁[V] kpair.π₁ := kpair.π₁.definable
+    letI : ℒₛₑₜ-function₁[V] kpair.π₂ := kpair.π₂.definable
+    letI : ℒₛₑₜ-function₁[V] succ := succ.definable
+    letI : ℒₛₑₜ-function₂[V] prod := prod.definable
+    letI : ℒₛₑₜ-relation[V] OrdinalPairLT := OrdinalPairLT.definable
+    show ℒₛₑₜ-relation[V] (fun S p ↦
+      ∀ q, q ∈ S ↔
+        q ∈ succ (ordinalMax (kpair.π₁ p) (kpair.π₂ p)) ×ˢ
+          succ (ordinalMax (kpair.π₁ p) (kpair.π₂ p)) ∧
+        OrdinalPairLT q p)
+    definability
+  have hEq : (fun S p ↦ S = ordinalPairInitialSegment p) = R := by
+    funext S p
+    exact propext ordinalPairInitialSegment_eq_iff
+  exact hEq ▸ hR
+
+instance ordinalPairInitialSegment.definable :
+    ℒₛₑₜ-function₁[V] ordinalPairInitialSegment :=
+  ordinalPairInitialSegment_eq_definable
+
+noncomputable def ordinalPairRelOn (X : V) : V :=
+  {r ∈ X ×ˢ X ; ∃ p ∈ X, ∃ q ∈ X, r = ⟨p, q⟩ₖ ∧ OrdinalPairLT p q}
+
+lemma ordinalPairRelOn_eq_iff {R X : V} :
+    R = ordinalPairRelOn X ↔
+      ∀ r, r ∈ R ↔
+        r ∈ X ×ˢ X ∧ ∃ p ∈ X, ∃ q ∈ X, r = ⟨p, q⟩ₖ ∧ OrdinalPairLT p q := by
+  constructor
+  · intro hR r
+    subst hR
+    simp [ordinalPairRelOn]
+  · intro hR
+    ext r
+    have hRel :
+        r ∈ ordinalPairRelOn X ↔
+          r ∈ X ×ˢ X ∧ ∃ p ∈ X, ∃ q ∈ X, r = ⟨p, q⟩ₖ ∧ OrdinalPairLT p q := by
+      simp [ordinalPairRelOn]
+    exact (hR r).trans hRel.symm
+
+instance ordinalPairRelOn_eq_definable :
+    ℒₛₑₜ-relation[V] (fun R X ↦ R = ordinalPairRelOn X) := by
+  let Q : V → V → Prop := fun R X ↦
+    ∀ r, r ∈ R ↔
+      r ∈ X ×ˢ X ∧ ∃ p ∈ X, ∃ q ∈ X, r = ⟨p, q⟩ₖ ∧ OrdinalPairLT p q
+  have hQ : ℒₛₑₜ-relation[V] Q := by
+    letI : ℒₛₑₜ-function₂[V] prod := prod.definable
+    letI : ℒₛₑₜ-function₂[V] kpair := kpair.definable
+    letI : ℒₛₑₜ-relation[V] OrdinalPairLT := OrdinalPairLT.definable
+    show ℒₛₑₜ-relation[V] (fun R X ↦
+      ∀ r, r ∈ R ↔
+        r ∈ X ×ˢ X ∧ ∃ p ∈ X, ∃ q ∈ X, r = ⟨p, q⟩ₖ ∧ OrdinalPairLT p q)
+    definability
+  have hEq : (fun R X ↦ R = ordinalPairRelOn X) = Q := by
+    funext R X
+    exact propext ordinalPairRelOn_eq_iff
+  exact hEq ▸ hQ
+
+instance ordinalPairRelOn.definable : ℒₛₑₜ-function₁[V] ordinalPairRelOn :=
+  ordinalPairRelOn_eq_definable
+
+lemma ordinalPairRelOn_subset_prod (X : V) : ordinalPairRelOn X ⊆ X ×ˢ X := by
+  exact sep_subset
+
+@[simp] lemma kpair_mem_ordinalPairRelOn_iff {X p q : V} :
+    ⟨p, q⟩ₖ ∈ ordinalPairRelOn X ↔ p ∈ X ∧ q ∈ X ∧ OrdinalPairLT p q := by
+  constructor
+  · intro hpq
+    have hpqX : ⟨p, q⟩ₖ ∈ X ×ˢ X := (mem_sep_iff.mp hpq).1
+    have hpXqX : p ∈ X ∧ q ∈ X := by
+      simpa [mem_prod_iff] using hpqX
+    rcases (mem_sep_iff.mp hpq).2 with ⟨p', hp'X, q', hq'X, hpqEq, hp'q'⟩
+    rcases kpair_inj hpqEq.symm with ⟨rfl, rfl⟩
+    exact ⟨hpXqX.1, hpXqX.2, hp'q'⟩
+  · rintro ⟨hpX, hqX, hpq⟩
+    refine mem_sep_iff.mpr ?_
+    refine ⟨by simpa [mem_prod_iff] using And.intro hpX hqX, p, hpX, q, hqX, rfl, hpq⟩
+
+lemma strictLinearOrderOn_ordinalPairRelOn {X : V}
+    (hX : ∀ p ∈ X, IsOrdinalPair p) :
+    IsStrictLinearOrderOn (ordinalPairRelOn X) X := by
+  refine ⟨ordinalPairRelOn_subset_prod X, ?_, ?_, ?_⟩
+  · intro p hpX hpp
+    exact ordinalPairLT_irrefl (hX p hpX) (kpair_mem_ordinalPairRelOn_iff.mp hpp).2.2
+  · intro p hpX q hqX r hrX hpq hqr
+    exact kpair_mem_ordinalPairRelOn_iff.mpr ⟨hpX, hrX,
+      ordinalPairLT_trans (hX p hpX) (hX q hqX) (hX r hrX)
+        (kpair_mem_ordinalPairRelOn_iff.mp hpq).2.2
+        (kpair_mem_ordinalPairRelOn_iff.mp hqr).2.2⟩
+  · intro p hpX q hqX
+    rcases ordinalPairLT_trichotomy (hX p hpX) (hX q hqX) with (hpq | hpq | hqp)
+    · exact Or.inl <| kpair_mem_ordinalPairRelOn_iff.mpr ⟨hpX, hqX, hpq⟩
+    · exact Or.inr <| Or.inl hpq
+    · exact Or.inr <| Or.inr <| kpair_mem_ordinalPairRelOn_iff.mpr ⟨hqX, hpX, hqp⟩
+
+lemma wellOrderOn_ordinalPairRelOn {X : V}
+    (hX : ∀ p ∈ X, IsOrdinalPair p) :
+    IsWellOrderOn (ordinalPairRelOn X) X := by
+  refine ⟨strictLinearOrderOn_ordinalPairRelOn hX, ?_⟩
+  intro A hAX hAne
+  have hA : ∀ p ∈ A, IsOrdinalPair p := fun p hpA ↦ hX p (hAX _ hpA)
+  rcases exists_least_ordinalPairLT_of_ne_empty hA hAne with ⟨m, hmA, hmLeast⟩
+  refine ⟨m, hmA, ?_⟩
+  intro p hpA
+  rcases hmLeast p hpA with (hpEq | hmp)
+  · exact Or.inl hpEq
+  · exact Or.inr <| kpair_mem_ordinalPairRelOn_iff.mpr ⟨hAX _ hmA, hAX _ hpA, hmp⟩
+
+lemma ordinalPairInitialSegment_isOrdinalPair {p q : V}
+    (hq : q ∈ ordinalPairInitialSegment p) : IsOrdinalPair q :=
+  (mem_ordinalPairInitialSegment_iff.mp hq).2.1
+
+lemma wellOrderOn_ordinalPairRelOn_ordinalPairInitialSegment (p : V) :
+    IsWellOrderOn (ordinalPairRelOn (ordinalPairInitialSegment p)) (ordinalPairInitialSegment p) :=
+  wellOrderOn_ordinalPairRelOn fun _ hq ↦ ordinalPairInitialSegment_isOrdinalPair hq
+
+lemma initialSegment_ordinalPairRelOn_eq {p q : V}
+    (hpq : OrdinalPairLT p q) :
+    initialSegment (ordinalPairRelOn (ordinalPairInitialSegment q))
+      (ordinalPairInitialSegment q) p = ordinalPairInitialSegment p := by
+  have hp : IsOrdinalPair p := hpq.1
+  have hq : IsOrdinalPair q := hpq.2.1
+  have hpq_mem : p ∈ ordinalPairInitialSegment q :=
+    (mem_ordinalPairInitialSegment_iff_of_isOrdinalPair hq).2 hpq
+  ext x
+  constructor
+  · intro hx
+    have hxp : ⟨x, p⟩ₖ ∈ ordinalPairRelOn (ordinalPairInitialSegment q) :=
+      (mem_initialSegment_iff.mp hx).2
+    exact (mem_ordinalPairInitialSegment_iff_of_isOrdinalPair hp).2
+      ((kpair_mem_ordinalPairRelOn_iff.mp hxp).2.2)
+  · intro hx
+    have hxp : OrdinalPairLT x p :=
+      (mem_ordinalPairInitialSegment_iff_of_isOrdinalPair hp).1 hx
+    have hxq : OrdinalPairLT x q :=
+      ordinalPairLT_trans hxp.1 hp hq hxp hpq
+    have hxq_mem : x ∈ ordinalPairInitialSegment q :=
+      (mem_ordinalPairInitialSegment_iff_of_isOrdinalPair hq).2 hxq
+    exact mem_initialSegment_iff.mpr ⟨hxq_mem,
+      kpair_mem_ordinalPairRelOn_iff.mpr ⟨hxq_mem, hpq_mem, hxp⟩⟩
+
+lemma ordinalPairInitialSegment_subset {p q : V}
+    (hpq : OrdinalPairLT p q) :
+    ordinalPairInitialSegment p ⊆ ordinalPairInitialSegment q := by
+  have hp : IsOrdinalPair p := hpq.1
+  have hq : IsOrdinalPair q := hpq.2.1
+  intro x hx
+  have hxp : OrdinalPairLT x p :=
+    (mem_ordinalPairInitialSegment_iff_of_isOrdinalPair hp).1 hx
+  exact (mem_ordinalPairInitialSegment_iff_of_isOrdinalPair hq).2 <|
+    ordinalPairLT_trans hxp.1 hp hq hxp hpq
+
+noncomputable def ordinalPairInitialSegmentType
+    [V ⊧ₘ* 𝗭𝗙] (p : V) : V :=
+  Ordinal.wellOrderTypeValTotal
+    (ordinalPairRelOn (ordinalPairInitialSegment p))
+    (ordinalPairInitialSegment p)
+
+lemma ordinalPairInitialSegmentType_spec
+    [V ⊧ₘ* 𝗭𝗙] (p : V) :
+    IsOrdinal (ordinalPairInitialSegmentType p) ∧
+      ∃ f : V, IsOrderIso
+        (IsOrdinal.memRelOn (ordinalPairInitialSegmentType p))
+        (ordinalPairInitialSegmentType p)
+        (ordinalPairRelOn (ordinalPairInitialSegment p))
+        (ordinalPairInitialSegment p) f := by
+  let hSwo :
+      IsWellOrderOn (ordinalPairRelOn (ordinalPairInitialSegment p))
+        (ordinalPairInitialSegment p) :=
+    wellOrderOn_ordinalPairRelOn_ordinalPairInitialSegment (p := p)
+  simpa [ordinalPairInitialSegmentType, Ordinal.wellOrderTypeValTotal_of_wellOrderOn hSwo] using
+    (Ordinal.wellOrderTypeVal_spec
+      (S := ordinalPairRelOn (ordinalPairInitialSegment p))
+      (Y := ordinalPairInitialSegment p)
+      hSwo)
+
+lemma ordinalPairInitialSegmentType_isOrdinal
+    [V ⊧ₘ* 𝗭𝗙] (p : V) : IsOrdinal (ordinalPairInitialSegmentType p) :=
+  (ordinalPairInitialSegmentType_spec (V := V) p).1
+
+private lemma isOrderIso_initialSegment_of_memRelOn
+    {S Y β a y f : V}
+    (hβord : IsOrdinal β)
+    (hf : IsOrderIso (IsOrdinal.memRelOn β) β S Y f)
+    (haβ : a ∈ β) (hayf : ⟨a, y⟩ₖ ∈ f) :
+    IsOrderIso (IsOrdinal.memRelOn a) a S (initialSegment S Y y)
+      (f ↾ (initialSegment (IsOrdinal.memRelOn β) β a)) := by
+  have hRes :
+      IsOrderIso (IsOrdinal.memRelOn β) (initialSegment (IsOrdinal.memRelOn β) β a)
+        S (initialSegment S Y y)
+        (f ↾ (initialSegment (IsOrdinal.memRelOn β) β a)) :=
+    IsOrderIso.restrict_initialSegment hf haβ hayf
+  refine ⟨?_, hRes.injective, hRes.range_eq, ?_⟩
+  · simpa [IsOrdinal.initialSegment_memRelOn_eq (α := β) haβ] using hRes.mem_function
+  · intro x₁ hx₁ x₂ hx₂
+    have hx₁β : x₁ ∈ β := hβord.toIsTransitive.transitive _ haβ _ hx₁
+    have hx₂β : x₂ ∈ β := hβord.toIsTransitive.transitive _ haβ _ hx₂
+    have hx₁I : x₁ ∈ initialSegment (IsOrdinal.memRelOn β) β a := by
+      simpa [IsOrdinal.initialSegment_memRelOn_eq (α := β) haβ] using hx₁
+    have hx₂I : x₂ ∈ initialSegment (IsOrdinal.memRelOn β) β a := by
+      simpa [IsOrdinal.initialSegment_memRelOn_eq (α := β) haβ] using hx₂
+    rw [show ⟨x₁, x₂⟩ₖ ∈ IsOrdinal.memRelOn a ↔ ⟨x₁, x₂⟩ₖ ∈ IsOrdinal.memRelOn β from by
+      simp [IsOrdinal.kpair_mem_memRelOn_iff, hx₁, hx₂, hx₁β, hx₂β]]
+    exact hRes.rel_iff hx₁I hx₂I
+
+lemma ordinalPairInitialSegmentType_strictIncreasing
+    [V ⊧ₘ* 𝗭𝗙] {p q : V}
+    (hpq : OrdinalPairLT p q) :
+    ordinalPairInitialSegmentType p ∈ ordinalPairInitialSegmentType q := by
+  let α := ordinalPairInitialSegmentType p
+  let β := ordinalPairInitialSegmentType q
+  let S := ordinalPairRelOn (ordinalPairInitialSegment q)
+  let Y := ordinalPairInitialSegment q
+  have hp : IsOrdinalPair p := hpq.1
+  have hq : IsOrdinalPair q := hpq.2.1
+  have hαord : IsOrdinal α := ordinalPairInitialSegmentType_isOrdinal (V := V) p
+  have hβord : IsOrdinal β := ordinalPairInitialSegmentType_isOrdinal (V := V) q
+  have hpY : p ∈ Y := by
+    exact (mem_ordinalPairInitialSegment_iff_of_isOrdinalPair hq).2 hpq
+  have hSwo : IsWellOrderOn S Y := by
+    simpa [S, Y] using wellOrderOn_ordinalPairRelOn_ordinalPairInitialSegment (p := q)
+  rcases (ordinalPairInitialSegmentType_spec (V := V) q).2 with ⟨f, hf⟩
+  have hpRange : p ∈ range f := by
+    simpa [Y, hf.range_eq] using hpY
+  rcases mem_range_iff.mp hpRange with ⟨a, haf⟩
+  have haβ : a ∈ β := (mem_of_mem_functions hf.mem_function haf).1
+  have hIsoA :
+      IsOrderIso (IsOrdinal.memRelOn a) a S (initialSegment S Y p)
+        (f ↾ (initialSegment (IsOrdinal.memRelOn β) β a)) :=
+    isOrderIso_initialSegment_of_memRelOn hβord hf haβ haf
+  rcases (ordinalPairInitialSegmentType_spec (V := V) p).2 with ⟨g, hg⟩
+  have hIsoα :
+      IsOrderIso (IsOrdinal.memRelOn α) α S (initialSegment S Y p) g := by
+    refine ⟨?_, hg.injective, ?_, ?_⟩
+    · simpa [α, S, Y, initialSegment_ordinalPairRelOn_eq hpq] using hg.mem_function
+    · simpa [α, S, Y, initialSegment_ordinalPairRelOn_eq hpq] using hg.range_eq
+    · intro x₁ hx₁ x₂ hx₂
+      have hmem := hg.rel_iff hx₁ hx₂
+      have hx₁p : g ‘ x₁ ∈ ordinalPairInitialSegment p :=
+        by
+          rw [← hg.range_eq]
+          exact value_mem_range hg.mem_function hx₁
+      have hx₂p : g ‘ x₂ ∈ ordinalPairInitialSegment p :=
+        by
+          rw [← hg.range_eq]
+          exact value_mem_range hg.mem_function hx₂
+      have hx₁q : g ‘ x₁ ∈ Y := by
+        simpa [Y] using ordinalPairInitialSegment_subset hpq _ hx₁p
+      have hx₂q : g ‘ x₂ ∈ Y := by
+        simpa [Y] using ordinalPairInitialSegment_subset hpq _ hx₂p
+      have hrel :
+          ⟨g ‘ x₁, g ‘ x₂⟩ₖ ∈ ordinalPairRelOn (ordinalPairInitialSegment p) ↔
+            ⟨g ‘ x₁, g ‘ x₂⟩ₖ ∈ S := by
+        constructor
+        · intro h
+          have hlt : OrdinalPairLT (g ‘ x₁) (g ‘ x₂) :=
+            (kpair_mem_ordinalPairRelOn_iff.mp h).2.2
+          simpa [S] using
+            (kpair_mem_ordinalPairRelOn_iff.mpr ⟨hx₁q, hx₂q, hlt⟩)
+        · intro h
+          have h' : ⟨g ‘ x₁, g ‘ x₂⟩ₖ ∈ ordinalPairRelOn (ordinalPairInitialSegment q) := by
+            simpa [S] using h
+          exact kpair_mem_ordinalPairRelOn_iff.mpr
+            ⟨hx₁p, hx₂p, (kpair_mem_ordinalPairRelOn_iff.mp h').2.2⟩
+      exact hmem.trans hrel
+  let Λ : V := succ (α ∪ β)
+  have hαuβord : IsOrdinal (α ∪ β) := by
+    rcases IsOrdinal.subset_or_supset (α := α) (β := β) with (hαβ | hβα)
+    · have hEq : α ∪ β = β := union_eq_iff_left.mpr hαβ
+      simpa [hEq] using hβord
+    · have hEq : α ∪ β = α := union_eq_iff_right.mpr hβα
+      simpa [hEq] using hαord
+  have hΛord : IsOrdinal Λ := by
+    simpa [Λ] using IsOrdinal.succ (α := α ∪ β)
+  have hαΛ : α ∈ Λ := by
+    have hαsub : α ⊆ α ∪ β := subset_union_left α β
+    rcases (IsOrdinal.subset_iff (α := α) (β := α ∪ β)).1 hαsub with (hEq | hMem)
+    · exact mem_succ_iff.mpr <| Or.inl hEq
+    · exact mem_succ_iff.mpr <| Or.inr hMem
+  have hβΛ : β ∈ Λ := by
+    have hβsub : β ⊆ α ∪ β := subset_union_right α β
+    rcases (IsOrdinal.subset_iff (α := β) (β := α ∪ β)).1 hβsub with (hEq | hMem)
+    · exact mem_succ_iff.mpr <| Or.inl hEq
+    · exact mem_succ_iff.mpr <| Or.inr hMem
+  have haΛ : a ∈ Λ := hΛord.toIsTransitive.transitive _ hβΛ _ haβ
+  have hαpair :
+      ⟨α, p⟩ₖ ∈ initSegIsoRel (IsOrdinal.memRelOn Λ) Λ S Y := by
+    exact IsOrdinal.kpair_mem_initSegIsoRel_memRelOn_of_isOrderIso
+      (S := S) (Y := Y) (Λ := Λ) (α := α) (y := p) (f := g)
+      hαΛ hpY hIsoα
+  have hapair :
+      ⟨a, p⟩ₖ ∈ initSegIsoRel (IsOrdinal.memRelOn Λ) Λ S Y := by
+    exact IsOrdinal.kpair_mem_initSegIsoRel_memRelOn_of_isOrderIso
+      (S := S) (Y := Y) (Λ := Λ) (α := a) (y := p)
+      (f := f ↾ (initialSegment (IsOrdinal.memRelOn β) β a))
+      haΛ hpY hIsoA
+  have hEq : α = a := initSegIsoRel_injective
+    (hRwo := by
+      letI : IsOrdinal Λ := hΛord
+      exact IsOrdinal.wellOrderOn_memRelOn (α := Λ))
+    (hSwo := hSwo) α a p hαpair hapair
+  simpa [α, hEq] using haβ
+
+lemma ordinalPairLT_zero_fst_zero_fst_iff {β γ : V}
+    (hβ : IsOrdinal β) (hγ : IsOrdinal γ) :
+    OrdinalPairLT ⟨0, β⟩ₖ ⟨0, γ⟩ₖ ↔ β ∈ γ := by
+  have h0 : IsOrdinal (0 : V) := by infer_instance
+  constructor
+  · intro h
+    exact (ordinalPairLT_kpair_zero_fst_iff h0 hβ hγ).1 h |>.2
+  · intro hβγ
+    have h0γ : (0 : V) ∈ γ := by
+      simpa [zero_def] using (IsOrdinal.empty_mem_iff_nonempty (α := γ)).2 ⟨β, hβγ⟩
+    exact (ordinalPairLT_kpair_zero_fst_iff h0 hβ hγ).2 ⟨h0γ, hβγ⟩
+
+/--
+Order type of the ordinal-pair initial segment at the pair `(0, α)`.
+-/
+noncomputable def ordinalPairZeroFstType
+    [V ⊧ₘ* 𝗭𝗙] (α : V) : V :=
+  ordinalPairInitialSegmentType ⟨0, α⟩ₖ
+
+lemma ordinalPairZeroFstType_isOrdinal
+    [V ⊧ₘ* 𝗭𝗙] (α : V) : IsOrdinal (ordinalPairZeroFstType α) :=
+  ordinalPairInitialSegmentType_isOrdinal (V := V) ⟨0, α⟩ₖ
+
+lemma ordinalPairZeroFstType_strictIncreasing
+    [V ⊧ₘ* 𝗭𝗙] {β γ : V}
+    (hβ : IsOrdinal β) (hγ : IsOrdinal γ) (hβγ : β ∈ γ) :
+    ordinalPairZeroFstType β ∈ ordinalPairZeroFstType γ := by
+  exact ordinalPairInitialSegmentType_strictIncreasing (V := V) <|
+    (ordinalPairLT_zero_fst_zero_fst_iff hβ hγ).2 hβγ
+
+instance ordinalPairInitialSegmentType_eq_definable
+    [V ⊧ₘ* 𝗭𝗙] :
+    ℒₛₑₜ-relation[V] (fun α p ↦ α = ordinalPairInitialSegmentType p) := by
+  letI : ℒₛₑₜ-function₁[V] ordinalPairInitialSegment := ordinalPairInitialSegment.definable
+  letI : ℒₛₑₜ-function₁[V] ordinalPairRelOn := ordinalPairRelOn.definable
+  letI : ℒₛₑₜ-function₂[V] Ordinal.wellOrderTypeValTotal :=
+    Ordinal.wellOrderTypeValTotal.definable (V := V)
+  unfold ordinalPairInitialSegmentType
+  definability
+
+instance ordinalPairInitialSegmentType.definable
+    [V ⊧ₘ* 𝗭𝗙] : ℒₛₑₜ-function₁[V] ordinalPairInitialSegmentType :=
+  ordinalPairInitialSegmentType_eq_definable (V := V)
+
+instance ordinalPairZeroFstType_eq_definable
+    [V ⊧ₘ* 𝗭𝗙] :
+    ℒₛₑₜ-relation[V] (fun β α ↦ β = ordinalPairZeroFstType α) := by
+  letI : ℒₛₑₜ-function₁[V] ordinalPairInitialSegmentType :=
+    ordinalPairInitialSegmentType.definable (V := V)
+  letI : ℒₛₑₜ-function₂[V] kpair := kpair.definable
+  unfold ordinalPairZeroFstType
+  definability
+
+instance ordinalPairZeroFstType.definable
+    [V ⊧ₘ* 𝗭𝗙] : ℒₛₑₜ-function₁[V] ordinalPairZeroFstType :=
+  ordinalPairZeroFstType_eq_definable (V := V)
+
+lemma subset_ordinalPairZeroFstType
+    [V ⊧ₘ* 𝗭𝗙] :
+    ∀ α : V, IsOrdinal α → α ⊆ ordinalPairZeroFstType α := by
+  exact strictIncreasing_function_subset_value
+    ordinalPairZeroFstType
+    (ordinalPairZeroFstType.definable (V := V))
+    (fun β γ hβ hγ hβγ ↦ ordinalPairZeroFstType_strictIncreasing (V := V) hβ hγ hβγ)
+    (fun α _ ↦ ordinalPairZeroFstType_isOrdinal (V := V) α)
+
 lemma transfinite_induction (P : V → Prop) (hP : ℒₛₑₜ-predicate P)
     (ih : ∀ α : Ordinal V, (∀ β < α, P β) → P α) : ∀ α : Ordinal V, P α := by
   by_contra! exs

@@ -1781,6 +1781,21 @@ lemma ordinalAddValue_isOrdinal
     (fun x hx ↦ by simp only [OrdinalAddSuccStep]; exact IsOrdinal.succ (α := x))
     (IsOrdinal.succ (α := β)) β (by simp)
 
+lemma ordinalAddValue_mem_ω {a β : V} (haω : a ∈ (ω : V)) (hβω : β ∈ (ω : V)) :
+    ordinalAddValue a β ∈ (ω : V) := by
+  let P : V → Prop := fun γ ↦ ordinalAddValue a γ ∈ (ω : V)
+  have hP : ℒₛₑₜ-predicate[V] P := by
+    letI : ℒₛₑₜ-function₁[V] (ordinalAddValue a) := ordinalAddValue_definable a
+    change ℒₛₑₜ-predicate[V] (fun γ ↦ ordinalAddValue a γ ∈ (ω : V))
+    definability
+  have hAll : ∀ γ ∈ (ω : V), P γ := by
+    apply naturalNumber_induction (P := P) hP
+    · simpa [P, ordinalAddValue_zero] using haω
+    · intro γ hγω ih
+      have hγord : IsOrdinal γ := IsOrdinal.nat hγω
+      simpa [P, ordinalAddValue_succ a γ hγord] using ω_succ_closed ih
+  exact hAll β hβω
+
 lemma ordinalAddValue_strictIncreasing_right
     (a : V) {β γ : V} (hγ : IsOrdinal γ) (hβγ : β ∈ γ) :
     ordinalAddValue a β ∈ ordinalAddValue a γ := by
@@ -2098,6 +2113,10 @@ noncomputable def addValue (α β : Ordinal V) : V :=
 @[simp] lemma addValue_succ (α β : Ordinal V) :
     addValue α β.succ = succ (addValue α β) := by
   simp [addValue, succ_val]
+
+lemma addValue_mem_ω {α β : Ordinal V} (hαω : α.val ∈ (ω : V)) (hβω : β.val ∈ (ω : V)) :
+    addValue α β ∈ (ω : V) := by
+  simpa [addValue] using IsOrdinal.ordinalAddValue_mem_ω hαω hβω
 
 lemma addValue_strictIncreasing_right (α : Ordinal V) {β γ : Ordinal V} (hβγ : β < γ) :
     addValue α β ∈ addValue α γ := by
@@ -2515,6 +2534,23 @@ lemma ordinalMulValue_isOrdinal
       simpa [OrdinalMulSuccStep] using ordinalAddValue_isOrdinal x a hx ha)
     (IsOrdinal.succ (α := β)) β (by simp)
 
+lemma ordinalMulValue_mem_ω {a β : V} (haω : a ∈ (ω : V)) (hβω : β ∈ (ω : V)) :
+    ordinalMulValue a β ∈ (ω : V) := by
+  let P : V → Prop := fun γ ↦ ordinalMulValue a γ ∈ (ω : V)
+  have hP : ℒₛₑₜ-predicate[V] P := by
+    letI : ℒₛₑₜ-function₁[V] (ordinalMulValue a) := ordinalMulValue_definable a
+    change ℒₛₑₜ-predicate[V] (fun γ ↦ ordinalMulValue a γ ∈ (ω : V))
+    definability
+  have hAll : ∀ γ ∈ (ω : V), P γ := by
+    apply naturalNumber_induction (P := P) hP
+    · simp [P, ordinalMulValue_zero]
+    · intro γ hγω ih
+      have hγord : IsOrdinal γ := IsOrdinal.nat hγω
+      have hAddω : ordinalAddValue (ordinalMulValue a γ) a ∈ (ω : V) :=
+        ordinalAddValue_mem_ω ih haω
+      simpa [P, ordinalMulValue_succ a γ hγord] using hAddω
+  exact hAll β hβω
+
 @[simp] lemma ordinalMulValue_zero_left
     (β : V) (hβ : IsOrdinal β) :
     ordinalMulValue (0 : V) β = (0 : V) := by
@@ -2800,6 +2836,10 @@ noncomputable def mulValue (α β : Ordinal V) : V :=
 @[simp] lemma mulValue_succ (α β : Ordinal V) :
     mulValue α β.succ = IsOrdinal.ordinalAddValue (mulValue α β) α.val := by
   simp [mulValue, succ_val]
+
+lemma mulValue_mem_ω {α β : Ordinal V} (hαω : α.val ∈ (ω : V)) (hβω : β.val ∈ (ω : V)) :
+    mulValue α β ∈ (ω : V) := by
+  simpa [mulValue] using IsOrdinal.ordinalMulValue_mem_ω hαω hβω
 
 lemma mulValue_isOrderIso_orderProd_memRelOn
     (α β : Ordinal V) :
@@ -3129,6 +3169,18 @@ lemma mulValue_eq_wellOrderTypeVal_orderProd_memRelOn
       (hR := IsOrdinal.wellOrderOn_memRelOn (α := α.val))
       (hS := IsOrdinal.wellOrderOn_memRelOn (α := β.val)))).2
     ⟨hγord, ⟨_, hIso.inv⟩⟩
+
+lemma zeroFstType_cardEQ_mulValue
+    (α : Ordinal V) :
+    ordinalPairZeroFstType α.val ≋ mulValue α α := by
+  rcases (ordinalPairInitialSegmentType_spec (V := V) ⟨0, α.val⟩ₖ).2 with ⟨f, hf⟩
+  have hLeft : ordinalPairZeroFstType α.val ≋ (α.val ×ˢ α.val) := by
+    simpa [ordinalPairZeroFstType, ordinalPairInitialSegment_zero_fst_eq_prod] using
+      CardEQ.of_bijective (IsOrderIso.bijective hf)
+  rcases mulValue_isOrderIso_orderProd_memRelOn α α with ⟨g, hg, _⟩
+  have hRight : (α.val ×ˢ α.val) ≋ mulValue α α := by
+    exact CardEQ.of_bijective (IsOrderIso.bijective hg)
+  exact CardEQ.trans hLeft hRight
 
 end Ordinal
 
