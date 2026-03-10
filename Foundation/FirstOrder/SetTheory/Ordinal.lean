@@ -634,6 +634,26 @@ instance IsLimitOrdinal.definable : ℒₛₑₜ-predicate[V] IsLimitOrdinal := 
   unfold IsLimitOrdinal
   definability
 
+lemma IsLimitOrdinal.succ_mem {α β : V}
+    (hα : IsLimitOrdinal α) (hβα : β ∈ α) :
+    succ β ∈ α := by
+  letI : IsOrdinal α := hα.1
+  letI : IsOrdinal β := hα.1.of_mem hβα
+  have hsuccSub : succ β ⊆ α := IsOrdinal.succ_subset_of_mem hβα
+  rcases (IsOrdinal.subset_iff (α := succ β) (β := α)).1 hsuccSub with (hEq | hsuccβα)
+  · exact False.elim (hα.2.2 ⟨β, hEq.symm⟩)
+  · exact hsuccβα
+
+lemma IsLimitOrdinal.sUnion_eq {α : V} (hα : IsLimitOrdinal α) :
+    ⋃ˢ α = α := by
+  ext z
+  constructor
+  · intro hz
+    rcases mem_sUnion_iff.mp hz with ⟨β, hβα, hzβ⟩
+    exact hα.1.toIsTransitive.transitive _ hβα _ hzβ
+  · intro hz
+    exact mem_sUnion_iff.mpr ⟨succ z, hα.succ_mem hz, by simp⟩
+
 variable (V)
 
 @[ext]

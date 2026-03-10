@@ -1595,6 +1595,1164 @@ instance card_eq_definable : ℒₛₑₜ-relation[V] (fun κ X ↦ κ = card X)
 
 instance card.definable : ℒₛₑₜ-function₁[V] card := card_eq_definable
 
+def IsCofinal (A X : V) : Prop := A ⊆ X ∧ ⋃ˢ A = X
+
+instance IsCofinal.definable : ℒₛₑₜ-relation[V] IsCofinal := by
+  letI : ℒₛₑₜ-function₁[V] sUnion := sUnion.definable
+  unfold IsCofinal
+  definability
+
+def IsStrictIncreasingFunction (f α X : V) : Prop :=
+  f ∈ X ^ α ∧ ∀ β ∈ α, ∀ γ ∈ α, β ∈ γ → f ‘ β ∈ f ‘ γ
+
+instance IsStrictIncreasingFunction.definable :
+    ℒₛₑₜ-relation₃[V] IsStrictIncreasingFunction := by
+  letI : ℒₛₑₜ-function₂[V] (· ^ ·) := function.definable
+  letI : ℒₛₑₜ-function₂[V] value := value.definable
+  unfold IsStrictIncreasingFunction
+  definability
+
+lemma IsStrictIncreasingFunction.mem_function {f α X : V}
+    (h : IsStrictIncreasingFunction f α X) :
+    f ∈ X ^ α := h.1
+
+def IsCofinalFunction (f α X : V) : Prop :=
+  IsStrictIncreasingFunction f α X ∧ IsCofinal (range f) X
+
+instance IsCofinalFunction.definable : ℒₛₑₜ-relation₃[V] IsCofinalFunction := by
+  letI : ℒₛₑₜ-function₁[V] range := range.definable
+  letI : ℒₛₑₜ-relation₃[V] IsStrictIncreasingFunction := IsStrictIncreasingFunction.definable
+  letI : ℒₛₑₜ-relation[V] IsCofinal := IsCofinal.definable
+  unfold IsCofinalFunction
+  definability
+
+lemma IsCofinalFunction.mem_function {f α X : V}
+    (h : IsCofinalFunction f α X) :
+    f ∈ X ^ α := h.1.1
+
+lemma IsCofinalFunction.isCofinal {f α X : V}
+    (h : IsCofinalFunction f α X) :
+    IsCofinal (range f) X := h.2
+
+def IsNondecreasingFunction (f α X : V) : Prop :=
+  f ∈ X ^ α ∧ ∀ β ∈ α, ∀ γ ∈ α, β ∈ γ → f ‘ β ⊆ f ‘ γ
+
+instance IsNondecreasingFunction.definable :
+    ℒₛₑₜ-relation₃[V] IsNondecreasingFunction := by
+  letI : ℒₛₑₜ-function₂[V] (· ^ ·) := function.definable
+  letI : ℒₛₑₜ-function₂[V] value := value.definable
+  unfold IsNondecreasingFunction
+  definability
+
+lemma IsNondecreasingFunction.mem_function {f α X : V}
+    (h : IsNondecreasingFunction f α X) :
+    f ∈ X ^ α := h.1
+
+lemma IsNondecreasingFunction.comp_isCofinalFunction
+    {f α β g X : V}
+    (hf : IsCofinalFunction f α β) (hg : IsNondecreasingFunction g β X):
+    IsNondecreasingFunction (compose f g) α X := by
+  have hfFun : f ∈ β ^ α := hf.mem_function
+  have hgFun : g ∈ X ^ β := hg.mem_function
+  refine ⟨compose_function hfFun hgFun, ?_⟩
+  intro ξ hξα ζ hζα hξζ
+  have hfξβ : f ‘ ξ ∈ β := hf.isCofinal.1 _ (value_mem_range hfFun hξα)
+  have hfζβ : f ‘ ζ ∈ β := hf.isCofinal.1 _ (value_mem_range hfFun hζα)
+  have hsub : g ‘ (f ‘ ξ) ⊆ g ‘ (f ‘ ζ) := hg.2 _ hfξβ _ hfζβ (hf.1.2 _ hξα _ hζα hξζ)
+  simpa [value_compose_eq hfFun hgFun hξα, value_compose_eq hfFun hgFun hζα] using hsub
+
+lemma IsNondecreasingFunction.isCofinal_comp_isCofinalFunction
+    {f α β g X : V}
+    (hf : IsCofinalFunction f α β) (hg : IsNondecreasingFunction g β X)
+    (hgCof : IsCofinal (range g) X) (hX : IsOrdinal X) :
+    IsCofinal (range (compose f g)) X := by
+  have hfFun : f ∈ β ^ α := hf.mem_function
+  have hgFun : g ∈ X ^ β := hg.mem_function
+  refine ⟨range_subset_of_mem_function (compose_function hfFun hgFun), ?_⟩
+  ext z
+  constructor
+  · intro hz
+    rcases mem_sUnion_iff.mp hz with ⟨y, hyRange, hzy⟩
+    have hyX : y ∈ X := (range_subset_of_mem_function (compose_function hfFun hgFun)) _ hyRange
+    exact hX.toIsTransitive.transitive _ hyX _ hzy
+  · intro hzX
+    have hzUnion : z ∈ ⋃ˢ range g := by rw [hgCof.2]; exact hzX
+    rcases mem_sUnion_iff.mp hzUnion with ⟨y, hyRangeG, hzy⟩
+    rcases mem_range_iff.mp hyRangeG with ⟨b, hbyg⟩
+    have hbβ : b ∈ β := (mem_of_mem_functions hgFun hbyg).1
+    have hbUnion : b ∈ ⋃ˢ range f := by rw [hf.isCofinal.2]; exact hbβ
+    rcases mem_sUnion_iff.mp hbUnion with ⟨c, hcRangeF, hbc⟩
+    rcases mem_range_iff.mp hcRangeF with ⟨a, haf⟩
+    have hbygVal : g ‘ b = y := value_eq_of_kpair_mem hgFun hbyg
+    have hsub : g ‘ b ⊆ g ‘ c := hg.2 _ hbβ _ (hf.isCofinal.1 _ hcRangeF) hbc
+    have hzgc : z ∈ g ‘ c := by
+      have hzgb : z ∈ g ‘ b := by simpa [hbygVal] using hzy
+      exact hsub _ hzgb
+    rcases exists_of_mem_function hgFun c (hf.isCofinal.1 _ hcRangeF) with ⟨u, -, hcug⟩
+    have hcgc : ⟨c, g ‘ c⟩ₖ ∈ g := by
+      have hcgVal : g ‘ c = u := value_eq_of_kpair_mem hgFun hcug
+      simpa [hcgVal] using hcug
+    refine mem_sUnion_iff.mpr ⟨g ‘ c, ?_, hzgc⟩
+    exact mem_range_iff.mpr ⟨a, kpair_mem_compose_iff.mpr ⟨c, haf, hcgc⟩⟩
+
+lemma isLimitOrdinal_of_isNondecreasingFunction_of_isCofinal
+    {f β α : V}
+    (hβ : IsOrdinal β) (hα : IsLimitOrdinal α)
+    (hf : IsNondecreasingFunction f β α)
+    (hCof : IsCofinal (range f) α) :
+    IsLimitOrdinal β := by
+  refine ⟨hβ, ?_, ?_⟩
+  · intro h0
+    have hfFun : f ∈ α ^ β := hf.mem_function
+    have hdom : domain f = ∅ := by simpa [h0] using (domain_eq_of_mem_function hfFun)
+    have hrange : range f = ∅ := by
+      apply subset_empty_iff_eq_empty.mp
+      intro y hy
+      rcases mem_range_iff.mp hy with ⟨x, hxy⟩
+      have hxDom : x ∈ domain f := mem_domain_of_kpair_mem hxy
+      simp [hdom] at hxDom
+    have hα0 : α = 0 := by
+      simpa [hrange, zero_def] using hCof.2.symm
+    exact hα.2.1 hα0
+  · intro hsucc
+    rcases hsucc with ⟨γ, rfl⟩
+    have hfFun : f ∈ α ^ succ γ := hf.mem_function
+    have hγmem : γ ∈ succ γ := by simp
+    have hfγα : f ‘ γ ∈ α := hCof.1 _ (value_mem_range hfFun hγmem)
+    have hαsub : α ⊆ f ‘ γ := by
+      intro z hzα
+      have hzUnion : z ∈ ⋃ˢ range f := by rw [hCof.2]; exact hzα
+      rcases mem_sUnion_iff.mp hzUnion with ⟨y, hyRange, hzy⟩
+      rcases mem_range_iff.mp hyRange with ⟨ξ, hξy⟩
+      have hξSucc : ξ ∈ succ γ := (mem_of_mem_functions hfFun hξy).1
+      have hξval : f ‘ ξ = y := value_eq_of_kpair_mem hfFun hξy
+      rcases mem_succ_iff.mp hξSucc with (hξEq | hξγ)
+      · have hyEq : y = f ‘ γ := by simpa [hξEq] using hξval.symm
+        simpa [hyEq] using hzy
+      · have hsub : f ‘ ξ ⊆ f ‘ γ := hf.2 _ hξSucc _ hγmem hξγ
+        have hyfγ : y ⊆ f ‘ γ := by simpa [hξval] using hsub
+        exact hyfγ _ hzy
+    have hfγsub : f ‘ γ ⊆ α := hα.1.transitive _ hfγα
+    have hEq : α = f ‘ γ := subset_antisymm hαsub hfγsub
+    have : α ∈ α := hEq.symm ▸ hfγα
+    exact (mem_irrefl α) this
+
+def HasCofinalFunction (X : V) : Prop :=
+  ∃ α : V, IsOrdinal α ∧ ∃ f : V, IsCofinalFunction f α X
+
+instance HasCofinalFunction.definable : ℒₛₑₜ-predicate[V] HasCofinalFunction := by
+  letI : ℒₛₑₜ-relation₃[V] IsCofinalFunction := IsCofinalFunction.definable
+  unfold HasCofinalFunction
+  definability
+
+lemma existsUnique_cofinality (X : V)
+    (hX : HasCofinalFunction X) :
+    ∃! α : V, IsOrdinal α ∧ (∃ f : V, IsCofinalFunction f α X) ∧
+      ∀ ξ : V, IsOrdinal ξ → (∃ g : V, IsCofinalFunction g ξ X) → α ⊆ ξ := by
+  let P : V → Prop := fun α ↦ ∃ f : V, IsCofinalFunction f α X
+  have hP : ℒₛₑₜ-predicate[V] P := by
+    letI : ℒₛₑₜ-relation₃[V] IsCofinalFunction := IsCofinalFunction.definable
+    change ℒₛₑₜ-predicate[V] (fun α ↦ ∃ f : V, IsCofinalFunction f α X)
+    definability
+  rcases exists_least_ordinal_of_exists (P := P) hP hX with
+    ⟨α, hαord, hαP, hαleast⟩
+  refine ⟨α, ⟨hαord, hαP, hαleast⟩, ?_⟩
+  intro β hβ
+  exact subset_antisymm
+    (hβ.2.2 α hαord hαP)
+    (hαleast β hβ.1 hβ.2.1)
+
+/--
+The least ordinal that is the domain of a strictly increasing cofinal function into `X`,
+if such an ordinal exists, and `∅` otherwise.
+-/
+noncomputable def cofinality (X : V) : V :=
+  Classical.extendedChoose! existsUnique_cofinality ∅ X
+
+lemma cofinality_spec {X : V} (hX : HasCofinalFunction X) :
+    IsOrdinal (cofinality X) ∧ (∃ f : V, IsCofinalFunction f (cofinality X) X) ∧
+      ∀ ξ : V, IsOrdinal ξ → (∃ g : V, IsCofinalFunction g ξ X) → cofinality X ⊆ ξ := by
+  simpa [cofinality] using
+    (Classical.extendedchoose!_spec
+      (h := existsUnique_cofinality) (default := (∅ : V)) (x := X) hX)
+
+lemma cofinality_isOrdinal {X : V} (hX : HasCofinalFunction X) :
+    IsOrdinal (cofinality X) :=
+  (cofinality_spec hX).1
+
+lemma cofinality_hasFunction {X : V} (hX : HasCofinalFunction X) :
+    ∃ f : V, IsCofinalFunction f (cofinality X) X :=
+  (cofinality_spec hX).2.1
+
+lemma cofinality_least {X ξ : V} (hX : HasCofinalFunction X)
+    (hξ : IsOrdinal ξ) (hξcof : ∃ g : V, IsCofinalFunction g ξ X) :
+    cofinality X ⊆ ξ :=
+  (cofinality_spec hX).2.2 ξ hξ hξcof
+
+@[simp] lemma cofinality_eq_empty_of_not_hasCofinalFunction {X : V}
+    (hX : ¬ HasCofinalFunction X) :
+    cofinality X = ∅ := by
+  simpa [cofinality] using
+    (Classical.extendedchoose!_spec_not
+      (h := existsUnique_cofinality) (default := (∅ : V)) (x := X) hX)
+
+lemma cofinality_eq_iff (X α : V) :
+    α = cofinality X ↔
+      (IsOrdinal α ∧ (∃ f : V, IsCofinalFunction f α X) ∧
+        ∀ ξ : V, IsOrdinal ξ → (∃ g : V, IsCofinalFunction g ξ X) → α ⊆ ξ) ∨
+      (¬ HasCofinalFunction X ∧ α = ∅) := by
+  by_cases hX : HasCofinalFunction X
+  · have hEq :
+        α = cofinality X ↔
+          IsOrdinal α ∧ (∃ f : V, IsCofinalFunction f α X) ∧
+            ∀ ξ : V, IsOrdinal ξ → (∃ g : V, IsCofinalFunction g ξ X) → α ⊆ ξ := by
+      simpa [cofinality] using
+        (Classical.extendedChoose!_eq_iff
+          (h := existsUnique_cofinality) (default := (∅ : V)) (hpx := hX)
+          (x := X) (y := α))
+    constructor
+    · intro hα
+      exact Or.inl (hEq.mp hα)
+    · rintro (hα | hα)
+      · exact hEq.mpr hα
+      · exact (hα.1 hX).elim
+  · constructor
+    · intro hα
+      exact Or.inr ⟨hX, by simpa [cofinality_eq_empty_of_not_hasCofinalFunction hX] using hα⟩
+    · rintro (hα | hα)
+      · exact (hX ⟨α, hα.1, hα.2.1⟩).elim
+      · simpa [cofinality_eq_empty_of_not_hasCofinalFunction hX] using hα.2
+
+instance cofinality_eq_definable :
+    ℒₛₑₜ-relation[V] (fun α X ↦ α = cofinality X) := by
+  let R : V → V → Prop := fun α X ↦
+    (IsOrdinal α ∧ (∃ f : V, IsCofinalFunction f α X) ∧
+      ∀ ξ : V, IsOrdinal ξ → (∃ g : V, IsCofinalFunction g ξ X) → α ⊆ ξ) ∨
+    (¬ HasCofinalFunction X ∧ α = ∅)
+  have hR : ℒₛₑₜ-relation[V] R := by
+    letI : ℒₛₑₜ-relation₃[V] IsCofinalFunction := IsCofinalFunction.definable
+    letI : ℒₛₑₜ-predicate[V] HasCofinalFunction := HasCofinalFunction.definable
+    show ℒₛₑₜ-relation[V] (fun α X ↦
+      (IsOrdinal α ∧ (∃ f : V, IsCofinalFunction f α X) ∧
+        ∀ ξ : V, IsOrdinal ξ → (∃ g : V, IsCofinalFunction g ξ X) → α ⊆ ξ) ∨
+      (¬ HasCofinalFunction X ∧ α = ∅))
+    definability
+  have hEq : (fun α X ↦ α = cofinality X) = R := by
+    funext α X
+    exact propext (cofinality_eq_iff X α)
+  exact hEq ▸ hR
+
+instance cofinality.definable : ℒₛₑₜ-function₁[V] cofinality :=
+  cofinality_eq_definable
+
+def IsSmallCoveringFunction (f α X : V) : Prop :=
+  f ∈ ℘ X ^ α ∧ (∀ Y ∈ range f, Y <# X) ∧ ⋃ˢ range f = X
+
+instance IsSmallCoveringFunction.definable :
+    ℒₛₑₜ-relation₃[V] IsSmallCoveringFunction := by
+  letI : ℒₛₑₜ-function₁[V] power := power.definable
+  letI : ℒₛₑₜ-function₂[V] (· ^ ·) := function.definable
+  letI : ℒₛₑₜ-function₁[V] range := range.definable
+  letI : ℒₛₑₜ-function₁[V] sUnion := sUnion.definable
+  letI : ℒₛₑₜ-relation[V] CardLT := CardLT.definable
+  unfold IsSmallCoveringFunction
+  definability
+
+lemma IsSmallCoveringFunction.mem_function {f α X : V}
+    (h : IsSmallCoveringFunction f α X) :
+    f ∈ ℘ X ^ α := h.1
+
+def HasSmallCoveringFunction (X : V) : Prop :=
+  ∃ α : V, IsOrdinal α ∧ ∃ f : V, IsSmallCoveringFunction f α X
+
+instance HasSmallCoveringFunction.definable :
+    ℒₛₑₜ-predicate[V] HasSmallCoveringFunction := by
+  letI : ℒₛₑₜ-relation₃[V] IsSmallCoveringFunction := IsSmallCoveringFunction.definable
+  unfold HasSmallCoveringFunction
+  definability
+
+lemma existsUnique_coveringNumber (X : V)
+    (hX : HasSmallCoveringFunction X) :
+    ∃! α : V, IsOrdinal α ∧ (∃ f : V, IsSmallCoveringFunction f α X) ∧
+      ∀ ξ : V, IsOrdinal ξ → (∃ g : V, IsSmallCoveringFunction g ξ X) → α ⊆ ξ := by
+  let P : V → Prop := fun α ↦ ∃ f : V, IsSmallCoveringFunction f α X
+  have hP : ℒₛₑₜ-predicate[V] P := by
+    letI : ℒₛₑₜ-relation₃[V] IsSmallCoveringFunction := IsSmallCoveringFunction.definable
+    change ℒₛₑₜ-predicate[V] (fun α ↦ ∃ f : V, IsSmallCoveringFunction f α X)
+    definability
+  rcases exists_least_ordinal_of_exists (P := P) hP hX with
+    ⟨α, hαord, hαP, hαleast⟩
+  refine ⟨α, ⟨hαord, hαP, hαleast⟩, ?_⟩
+  intro β hβ
+  exact subset_antisymm
+    (hβ.2.2 α hαord hαP)
+    (hαleast β hβ.1 hβ.2.1)
+
+/--
+The least ordinal that is the domain of a function into `℘ X` whose values are all
+cardinal-strictly-smaller than `X` and whose union is `X`, if such an ordinal exists,
+and `∅` otherwise.
+-/
+noncomputable def coveringNumber (X : V) : V :=
+  Classical.extendedChoose! existsUnique_coveringNumber ∅ X
+
+lemma coveringNumber_spec {X : V} (hX : HasSmallCoveringFunction X) :
+    IsOrdinal (coveringNumber X) ∧
+      (∃ f : V, IsSmallCoveringFunction f (coveringNumber X) X) ∧
+      ∀ ξ : V, IsOrdinal ξ → (∃ g : V, IsSmallCoveringFunction g ξ X) →
+        coveringNumber X ⊆ ξ := by
+  simpa [coveringNumber] using
+    (Classical.extendedchoose!_spec
+      (h := existsUnique_coveringNumber) (default := (∅ : V)) (x := X) hX)
+
+lemma coveringNumber_isOrdinal {X : V} (hX : HasSmallCoveringFunction X) :
+    IsOrdinal (coveringNumber X) :=
+  (coveringNumber_spec hX).1
+
+lemma coveringNumber_hasFunction {X : V} (hX : HasSmallCoveringFunction X) :
+    ∃ f : V, IsSmallCoveringFunction f (coveringNumber X) X :=
+  (coveringNumber_spec hX).2.1
+
+lemma coveringNumber_least {X ξ : V} (hX : HasSmallCoveringFunction X)
+    (hξ : IsOrdinal ξ) (hξcover : ∃ g : V, IsSmallCoveringFunction g ξ X) :
+    coveringNumber X ⊆ ξ :=
+  (coveringNumber_spec hX).2.2 ξ hξ hξcover
+
+@[simp] lemma coveringNumber_eq_empty_of_not_hasSmallCoveringFunction {X : V}
+    (hX : ¬ HasSmallCoveringFunction X) :
+    coveringNumber X = ∅ := by
+  simpa [coveringNumber] using
+    (Classical.extendedchoose!_spec_not
+      (h := existsUnique_coveringNumber) (default := (∅ : V)) (x := X) hX)
+
+lemma coveringNumber_eq_iff (X α : V) :
+    α = coveringNumber X ↔
+      (IsOrdinal α ∧ (∃ f : V, IsSmallCoveringFunction f α X) ∧
+        ∀ ξ : V, IsOrdinal ξ → (∃ g : V, IsSmallCoveringFunction g ξ X) → α ⊆ ξ) ∨
+      (¬ HasSmallCoveringFunction X ∧ α = ∅) := by
+  by_cases hX : HasSmallCoveringFunction X
+  · have hEq :
+        α = coveringNumber X ↔
+          IsOrdinal α ∧ (∃ f : V, IsSmallCoveringFunction f α X) ∧
+            ∀ ξ : V, IsOrdinal ξ → (∃ g : V, IsSmallCoveringFunction g ξ X) → α ⊆ ξ := by
+      simpa [coveringNumber] using
+        (Classical.extendedChoose!_eq_iff
+          (h := existsUnique_coveringNumber) (default := (∅ : V)) (hpx := hX)
+          (x := X) (y := α))
+    constructor
+    · intro hα
+      exact Or.inl (hEq.mp hα)
+    · rintro (hα | hα)
+      · exact hEq.mpr hα
+      · exact (hα.1 hX).elim
+  · constructor
+    · intro hα
+      exact Or.inr ⟨hX, by simpa [coveringNumber_eq_empty_of_not_hasSmallCoveringFunction hX] using hα⟩
+    · rintro (hα | hα)
+      · exact (hX ⟨α, hα.1, hα.2.1⟩).elim
+      · simpa [coveringNumber_eq_empty_of_not_hasSmallCoveringFunction hX] using hα.2
+
+instance coveringNumber_eq_definable :
+    ℒₛₑₜ-relation[V] (fun α X ↦ α = coveringNumber X) := by
+  let R : V → V → Prop := fun α X ↦
+    (IsOrdinal α ∧ (∃ f : V, IsSmallCoveringFunction f α X) ∧
+      ∀ ξ : V, IsOrdinal ξ → (∃ g : V, IsSmallCoveringFunction g ξ X) → α ⊆ ξ) ∨
+    (¬ HasSmallCoveringFunction X ∧ α = ∅)
+  have hR : ℒₛₑₜ-relation[V] R := by
+    letI : ℒₛₑₜ-relation₃[V] IsSmallCoveringFunction := IsSmallCoveringFunction.definable
+    letI : ℒₛₑₜ-predicate[V] HasSmallCoveringFunction := HasSmallCoveringFunction.definable
+    show ℒₛₑₜ-relation[V] (fun α X ↦
+      (IsOrdinal α ∧ (∃ f : V, IsSmallCoveringFunction f α X) ∧
+        ∀ ξ : V, IsOrdinal ξ → (∃ g : V, IsSmallCoveringFunction g ξ X) → α ⊆ ξ) ∨
+      (¬ HasSmallCoveringFunction X ∧ α = ∅))
+    definability
+  have hEq : (fun α X ↦ α = coveringNumber X) = R := by
+    funext α X
+    exact propext (coveringNumber_eq_iff X α)
+  exact hEq ▸ hR
+
+instance coveringNumber.definable : ℒₛₑₜ-function₁[V] coveringNumber :=
+  coveringNumber_eq_definable
+
+lemma coveringNumber_isCardinal [V ⊧ₘ* 𝗭𝗙] (X : V) :
+    IsCardinal (coveringNumber X) := by
+  by_cases hX : HasSmallCoveringFunction X
+  · have hαord : IsOrdinal (coveringNumber X) := coveringNumber_isOrdinal hX
+    refine ⟨hαord, ?_⟩
+    rcases coveringNumber_hasFunction hX with ⟨f, hf⟩
+    have hfFun : f ∈ ℘ X ^ coveringNumber X := hf.mem_function
+    intro β hβα hβαeq
+    have hβord : IsOrdinal β := hαord.of_mem hβα
+    rcases CardEQ.exists_bijective (V := V) hβαeq with ⟨e, heBij⟩
+    have heFun : e ∈ coveringNumber X ^ β := heBij.mem_function
+    let g : V := compose e f
+    have hgFun : g ∈ ℘ X ^ β := compose_function heFun hfFun
+    have hRange : range g = range f := by
+      unfold g
+      exact compose_range_eq_of_range_eq
+        heFun (mem_function_range_of_mem_function hfFun) heBij.range_eq rfl
+    have hg : IsSmallCoveringFunction g β X := by
+      refine ⟨hgFun, ?_, ?_⟩
+      · intro Y hY
+        rw [hRange] at hY
+        exact hf.2.1 Y hY
+      · simpa [hRange] using hf.2.2
+    have hαsubβ : coveringNumber X ⊆ β :=
+      coveringNumber_least hX hβord ⟨g, hg⟩
+    have hβsubα : β ⊆ coveringNumber X := hαord.transitive β hβα
+    have hEq : coveringNumber X = β := subset_antisymm hαsubβ hβsubα
+    exact (mem_irrefl β) (hEq.symm ▸ hβα)
+  · have h0 : IsCardinal (∅ : V) := isCardinal_of_mem_ω (V := V) (by simp)
+    simpa [coveringNumber_eq_empty_of_not_hasSmallCoveringFunction hX] using h0
+
+lemma identity_isCofinalFunction_of_isLimitOrdinal {α : V}
+    (hα : IsLimitOrdinal α) :
+    IsCofinalFunction (identity α) α α := by
+  refine ⟨?_, ?_⟩
+  · refine ⟨identity_mem_function α, ?_⟩
+    intro β hβα γ hγα hβγ
+    have hβpair : ⟨β, β⟩ₖ ∈ identity α := by
+      simpa using (show β ∈ α ∧ β = β from ⟨hβα, rfl⟩)
+    have hγpair : ⟨γ, γ⟩ₖ ∈ identity α := by
+      simpa using (show γ ∈ α ∧ γ = γ from ⟨hγα, rfl⟩)
+    have hβval : (identity α) ‘ β = β := value_eq_of_kpair_mem (identity_mem_function α) hβpair
+    have hγval : (identity α) ‘ γ = γ := value_eq_of_kpair_mem (identity_mem_function α) hγpair
+    simpa [hβval, hγval] using hβγ
+  · have hRange : range (identity α) = α := by
+      ext z
+      constructor
+      · intro hz
+        rcases mem_range_iff.mp hz with ⟨x, hx⟩
+        rcases kpair_mem_identity_iff.mp hx with ⟨hxα, hxz⟩
+        simpa [hxz] using hxα
+      · intro hz
+        exact mem_range_iff.mpr ⟨z, by
+          simpa using (show z ∈ α ∧ z = z from ⟨hz, rfl⟩)⟩
+    refine ⟨?_, ?_⟩
+    · simp [hRange]
+    · simpa [hRange] using hα.sUnion_eq
+
+lemma IsCofinalFunction.comp {f α β g X : V}
+    (hf : IsCofinalFunction f α β) (hg : IsCofinalFunction g β X)
+    (hX : IsOrdinal X) :
+    IsCofinalFunction (compose f g) α X := by
+  have hfFun : f ∈ β ^ α := hf.mem_function
+  have hgFun : g ∈ X ^ β := hg.mem_function
+  have hfRangeSub : range f ⊆ β := hf.isCofinal.1
+  have hfRangeEq : ⋃ˢ range f = β := hf.isCofinal.2
+  have hgRangeSub : range g ⊆ X := hg.isCofinal.1
+  have hgRangeEq : ⋃ˢ range g = X := hg.isCofinal.2
+  refine ⟨?_, ?_⟩
+  · refine ⟨compose_function hfFun hgFun, ?_⟩
+    intro ξ hξα ζ hζα hξζ
+    have hfξβ : f ‘ ξ ∈ β := hfRangeSub _ (value_mem_range hfFun hξα)
+    have hfζβ : f ‘ ζ ∈ β := hfRangeSub _ (value_mem_range hfFun hζα)
+    have hfg : g ‘ (f ‘ ξ) ∈ g ‘ (f ‘ ζ) := hg.1.2 _ hfξβ _ hfζβ (hf.1.2 _ hξα _ hζα hξζ)
+    simpa [value_compose_eq hfFun hgFun hξα, value_compose_eq hfFun hgFun hζα] using hfg
+  · refine ⟨range_subset_of_mem_function (compose_function hfFun hgFun), ?_⟩
+    ext z
+    constructor
+    · intro hz
+      rcases mem_sUnion_iff.mp hz with ⟨y, hyRange, hzy⟩
+      have hyX : y ∈ X := (range_subset_of_mem_function (compose_function hfFun hgFun)) _ hyRange
+      exact hX.toIsTransitive.transitive _ hyX _ hzy
+    · intro hzX
+      have hzUnion : z ∈ ⋃ˢ range g := by rw [hgRangeEq]; exact hzX
+      rcases mem_sUnion_iff.mp hzUnion with ⟨y, hyRangeG, hzy⟩
+      rcases mem_range_iff.mp hyRangeG with ⟨b, hbyg⟩
+      have hbβ : b ∈ β := (mem_of_mem_functions hgFun hbyg).1
+      have hbUnion : b ∈ ⋃ˢ range f := by rw [hfRangeEq]; exact hbβ
+      rcases mem_sUnion_iff.mp hbUnion with ⟨c, hcRangeF, hbc⟩
+      rcases mem_range_iff.mp hcRangeF with ⟨a, haf⟩
+      have hcβ : c ∈ β := hfRangeSub _ hcRangeF
+      have hbygVal : g ‘ b = y := value_eq_of_kpair_mem hgFun hbyg
+      have hgbgc : g ‘ b ∈ g ‘ c := hg.1.2 _ hbβ _ hcβ hbc
+      have hgcX : g ‘ c ∈ X := hgRangeSub _ (value_mem_range hgFun hcβ)
+      have hgcOrd : IsOrdinal (g ‘ c) := hX.of_mem hgcX
+      have hzgc : z ∈ g ‘ c := by
+        have hzgb : z ∈ g ‘ b := by simpa [hbygVal] using hzy
+        exact hgcOrd.toIsTransitive.transitive _ hgbgc _ hzgb
+      rcases exists_of_mem_function hgFun c hcβ with ⟨u, -, hcug⟩
+      have hcgc : ⟨c, g ‘ c⟩ₖ ∈ g := by
+        have hcgVal : g ‘ c = u := value_eq_of_kpair_mem hgFun hcug
+        simpa [hcgVal] using hcug
+      refine mem_sUnion_iff.mpr ⟨g ‘ c, ?_, hzgc⟩
+      exact mem_range_iff.mpr ⟨a, kpair_mem_compose_iff.mpr ⟨c, haf, hcgc⟩⟩
+
+lemma hasCofinalFunction_of_isLimitOrdinal {α : V}
+    (hα : IsLimitOrdinal α) :
+    HasCofinalFunction α := by
+  exact ⟨α, hα.1, ⟨identity α, identity_isCofinalFunction_of_isLimitOrdinal hα⟩⟩
+
+lemma cofinality_subset_of_isLimitOrdinal {α : V}
+    (hα : IsLimitOrdinal α) :
+    cofinality α ⊆ α := by
+  have hHas : HasCofinalFunction α := hasCofinalFunction_of_isLimitOrdinal hα
+  exact cofinality_least hHas hα.1
+    ⟨identity α, identity_isCofinalFunction_of_isLimitOrdinal hα⟩
+
+lemma cofinality_isLimitOrdinal_of_isLimitOrdinal {α : V}
+    (hα : IsLimitOrdinal α) :
+    IsLimitOrdinal (cofinality α) := by
+  have hHas : HasCofinalFunction α := hasCofinalFunction_of_isLimitOrdinal hα
+  refine ⟨cofinality_isOrdinal hHas, ?_, ?_⟩
+  · intro h0
+    rcases cofinality_hasFunction hHas with ⟨f, hf⟩
+    have hfFun : f ∈ α ^ cofinality α := hf.mem_function
+    have hdom : domain f = ∅ := by
+      simpa [h0] using (domain_eq_of_mem_function hfFun)
+    have hrange : range f = ∅ := by
+      apply subset_empty_iff_eq_empty.mp
+      intro y hy
+      rcases mem_range_iff.mp hy with ⟨x, hxy⟩
+      have hxDom : x ∈ domain f := mem_domain_of_kpair_mem hxy
+      simp [hdom] at hxDom
+    have hα0 : α = 0 := by
+      simpa [hrange, zero_def] using (hf.isCofinal.2.symm)
+    exact hα.2.1 hα0
+  · intro hsucc
+    rcases hsucc with ⟨β, hβ⟩
+    rcases cofinality_hasFunction hHas with ⟨f, hf⟩
+    have hfFun : f ∈ α ^ succ β := by
+      simpa [hβ] using hf.mem_function
+    have hstrict : ∀ ξ ∈ succ β, ∀ ζ ∈ succ β, ξ ∈ ζ → f ‘ ξ ∈ f ‘ ζ := by
+      simpa [hβ] using hf.1.2
+    have hβmem : β ∈ succ β := by simp
+    have hfβα : f ‘ β ∈ α := hf.isCofinal.1 _ (value_mem_range hfFun hβmem)
+    have hfβord : IsOrdinal (f ‘ β) := hα.1.of_mem hfβα
+    have hαsub : α ⊆ f ‘ β := by
+      intro z hzα
+      have hzUnion : z ∈ ⋃ˢ range f := by
+        rw [hf.isCofinal.2]
+        exact hzα
+      rcases mem_sUnion_iff.mp hzUnion with ⟨y, hyRange, hzy⟩
+      rcases mem_range_iff.mp hyRange with ⟨ξ, hξy⟩
+      have hξSucc : ξ ∈ succ β := (mem_of_mem_functions hfFun hξy).1
+      have hξval : f ‘ ξ = y := value_eq_of_kpair_mem hfFun hξy
+      rcases mem_succ_iff.mp hξSucc with (hξEq | hξβ)
+      · have hyEq : y = f ‘ β := by simpa [hξEq] using hξval.symm
+        simpa [hyEq] using hzy
+      · have hyfβ : y ∈ f ‘ β := by
+          have hFξFβ : f ‘ ξ ∈ f ‘ β := hstrict ξ hξSucc β hβmem hξβ
+          simpa [hξval] using hFξFβ
+        exact hfβord.toIsTransitive.transitive _ hyfβ _ hzy
+    have hfβsub : f ‘ β ⊆ α := hα.1.transitive _ hfβα
+    have hEq : α = f ‘ β := subset_antisymm hαsub hfβsub
+    have : α ∈ α := hEq.symm ▸ hfβα
+    exact (mem_irrefl α) this
+
+lemma cofinality_cofinality_eq_of_isLimitOrdinal {α : V}
+    (hα : IsLimitOrdinal α) :
+    cofinality (cofinality α) = cofinality α := by
+  have hHasα : HasCofinalFunction α := hasCofinalFunction_of_isLimitOrdinal hα
+  have hcofLim : IsLimitOrdinal (cofinality α) := cofinality_isLimitOrdinal_of_isLimitOrdinal hα
+  have hHasCof : HasCofinalFunction (cofinality α) := hasCofinalFunction_of_isLimitOrdinal hcofLim
+  have hLeft : cofinality (cofinality α) ⊆ cofinality α :=
+    cofinality_subset_of_isLimitOrdinal hcofLim
+  have hRight : cofinality α ⊆ cofinality (cofinality α) := by
+    rcases cofinality_hasFunction hHasCof with ⟨f, hf⟩
+    rcases cofinality_hasFunction hHasα with ⟨g, hg⟩
+    exact cofinality_least hHasα (cofinality_isOrdinal hHasCof)
+      ⟨compose f g, hf.comp hg hα.1⟩
+  exact subset_antisymm hLeft hRight
+
+lemma IsOrderIso.isCofinalFunction_of_isCofinal
+    {α β X f : V} [IsOrdinal β]
+    (hf : IsOrderIso (IsOrdinal.memRelOn β) β (IsOrdinal.memRelOn X) X f)
+    (hX : IsCofinal X α) :
+    IsCofinalFunction f β α := by
+  have hfFunX : f ∈ X ^ β := hf.mem_function
+  refine ⟨⟨mem_function_of_mem_function_of_subset hfFunX hX.1, ?_⟩, ?_⟩
+  · intro ξ hξβ ζ hζβ hξζ
+    have hξζRel : ⟨ξ, ζ⟩ₖ ∈ IsOrdinal.memRelOn β := by
+      exact IsOrdinal.kpair_mem_memRelOn_iff.mpr ⟨hξβ, hζβ, hξζ⟩
+    exact (IsOrdinal.kpair_mem_memRelOn_iff.mp ((hf.rel_iff hξβ hζβ).1 hξζRel)).2.2
+  · refine ⟨?_, ?_⟩
+    · simpa [hf.range_eq] using hX.1
+    · simpa [hf.range_eq] using hX.2
+
+lemma cofinality_subset_wellOrderTypeVal_memRelOn_of_isCofinal [V ⊧ₘ* 𝗭𝗙]
+    {α X : V} (hα : IsLimitOrdinal α) (hX : IsCofinal X α) :
+    cofinality α ⊆
+      Ordinal.wellOrderTypeVal (IsOrdinal.memRelOn X) X
+        (by
+          letI : IsOrdinal α := hα.1
+          exact IsOrdinal.wellOrderOn_memRelOn_subset (α := α) hX.1) := by
+  letI : IsOrdinal α := hα.1
+  let hXwo : IsWellOrderOn (IsOrdinal.memRelOn X) X :=
+    IsOrdinal.wellOrderOn_memRelOn_subset (α := α) hX.1
+  let β : V := Ordinal.wellOrderTypeVal (IsOrdinal.memRelOn X) X hXwo
+  have hHas : HasCofinalFunction α := hasCofinalFunction_of_isLimitOrdinal hα
+  have hβord : IsOrdinal β := by
+    simpa [β] using (Ordinal.wellOrderTypeVal_spec (IsOrdinal.memRelOn X) X hXwo).1
+  rcases Ordinal.wellOrderType_isOrderIso (S := IsOrdinal.memRelOn X) (Y := X) (hSwo := hXwo) with
+    ⟨f, hf⟩
+  exact cofinality_least hHas hβord ⟨f, hf.isCofinalFunction_of_isCofinal hX⟩
+
+lemma cofinality_le_wellOrderType_memRelOn_of_isCofinal [V ⊧ₘ* 𝗭𝗙]
+    {α X : V} (hα : IsLimitOrdinal α) (hX : IsCofinal X α) :
+    ({ val := cofinality α
+       ordinal := by
+         exact cofinality_isOrdinal (hasCofinalFunction_of_isLimitOrdinal hα) } : Ordinal V) ≤
+      Ordinal.wellOrderType (IsOrdinal.memRelOn X) X
+        (by
+          letI : IsOrdinal α := hα.1
+          exact IsOrdinal.wellOrderOn_memRelOn_subset (α := α) hX.1) := by
+  have hHas : HasCofinalFunction α := hasCofinalFunction_of_isLimitOrdinal hα
+  let κ : Ordinal V := ⟨cofinality α, cofinality_isOrdinal hHas⟩
+  letI : IsOrdinal α := hα.1
+  simpa [κ, Ordinal.le_def, Ordinal.wellOrderType] using
+    cofinality_subset_wellOrderTypeVal_memRelOn_of_isCofinal hα hX
+
+lemma exists_isCofinalFunction_subset_of_mem_function_of_isCofinal [V ⊧ₘ* 𝗭𝗙]
+    {f β α : V}
+    (hβ : IsOrdinal β) (hα : IsLimitOrdinal α)
+    (hf : f ∈ α ^ β)
+    (hCof : IsCofinal (range f) α) :
+    ∃ γ : V, IsOrdinal γ ∧ γ ⊆ β ∧ ∃ g : V, IsCofinalFunction g γ α := by
+  letI : IsOrdinal β := hβ
+  have hfFun : f ∈ α ^ β := hf
+  let P : V → Prop := fun ξ ↦ ∀ η ∈ ξ, f ‘ η ∈ f ‘ ξ
+  have hP : ℒₛₑₜ-predicate[V] P := by
+    letI : ℒₛₑₜ-function₂[V] value := value.definable
+    change ℒₛₑₜ-predicate[V] (fun ξ ↦ ∀ η ∈ ξ, f ‘ η ∈ f ‘ ξ)
+    definability
+  let R : V := sep β P hP
+  have hRsub : R ⊆ β := sep_subset
+  let hRwo : IsWellOrderOn (IsOrdinal.memRelOn R) R :=
+    IsOrdinal.wellOrderOn_memRelOn_subset (α := β) hRsub
+  let γ : V := Ordinal.wellOrderTypeVal (IsOrdinal.memRelOn R) R hRwo
+  have hγord : IsOrdinal γ := by
+    simpa [γ] using (Ordinal.wellOrderTypeVal_spec (IsOrdinal.memRelOn R) R hRwo).1
+  rcases Ordinal.wellOrderType_isOrderIso (S := IsOrdinal.memRelOn R) (Y := R) (hSwo := hRwo) with
+    ⟨e, he⟩
+  have heFunβ : e ∈ β ^ γ := mem_function_of_mem_function_of_subset he.mem_function hRsub
+  let g : V := compose e f
+  have hgStrict : IsStrictIncreasingFunction g γ α := by
+    refine ⟨compose_function heFunβ hfFun, ?_⟩
+    intro ξ hξγ ζ hζγ hξζ
+    have hξζRel : ⟨ξ, ζ⟩ₖ ∈ IsOrdinal.memRelOn γ :=
+      IsOrdinal.kpair_mem_memRelOn_iff.mpr ⟨hξγ, hζγ, hξζ⟩
+    have heRel : ⟨e ‘ ξ, e ‘ ζ⟩ₖ ∈ IsOrdinal.memRelOn R := (he.rel_iff hξγ hζγ).1 hξζRel
+    have heζR : e ‘ ζ ∈ R := (IsOrdinal.kpair_mem_memRelOn_iff.mp heRel).2.1
+    have heξζ : e ‘ ξ ∈ e ‘ ζ := (IsOrdinal.kpair_mem_memRelOn_iff.mp heRel).2.2
+    have hRec : ∀ η ∈ e ‘ ζ, f ‘ η ∈ f ‘ (e ‘ ζ) := (mem_sep_iff.mp heζR).2
+    have hmem : f ‘ (e ‘ ξ) ∈ f ‘ (e ‘ ζ) := hRec _ heξζ
+    simpa [g, value_compose_eq heFunβ hfFun hξγ, value_compose_eq heFunβ hfFun hζγ] using hmem
+  have hgCof : IsCofinal (range g) α := by
+    letI : IsFunction f := IsFunction.of_mem hfFun
+    refine ⟨range_subset_of_mem_function hgStrict.mem_function, ?_⟩
+    ext z
+    constructor
+    · intro hz
+      rcases mem_sUnion_iff.mp hz with ⟨y, hyRange, hzy⟩
+      have hyα : y ∈ α := (range_subset_of_mem_function hgStrict.mem_function) _ hyRange
+      exact hα.1.toIsTransitive.transitive _ hyα _ hzy
+    · intro hzα
+      have hzUnion : z ∈ ⋃ˢ range f := by rw [hCof.2]; exact hzα
+      rcases mem_sUnion_iff.mp hzUnion with ⟨y, hyRangeF, hzy⟩
+      rcases mem_range_iff.mp hyRangeF with ⟨ξ₀, hξ₀pair⟩
+      have hξ₀β : ξ₀ ∈ β := (mem_of_mem_functions hfFun hξ₀pair).1
+      have hξ₀val : f ‘ ξ₀ = y := value_eq_of_kpair_mem hfFun hξ₀pair
+      let Q : V → Prop := fun ξ ↦ ξ ∈ β ∧ z ∈ f ‘ ξ
+      have hQ : ℒₛₑₜ-predicate[V] Q := by
+        letI : ℒₛₑₜ-function₂[V] value := value.definable
+        change ℒₛₑₜ-predicate[V] (fun ξ ↦ ξ ∈ β ∧ z ∈ f ‘ ξ)
+        definability
+      have hEx : ∃ ξ : V, IsOrdinal ξ ∧ Q ξ := by
+        refine ⟨ξ₀, hβ.of_mem hξ₀β, hξ₀β, ?_⟩
+        simpa [hξ₀val] using hzy
+      rcases exists_least_ordinal_of_exists (P := Q) hQ hEx with
+        ⟨ξ, hξord, hξQ, hξleast⟩
+      have hξβ : ξ ∈ β := hξQ.1
+      have hzfξ : z ∈ f ‘ ξ := hξQ.2
+      have hfξα : f ‘ ξ ∈ α := hCof.1 _ (value_mem_range hfFun hξβ)
+      have hfξord : IsOrdinal (f ‘ ξ) := hα.1.of_mem hfξα
+      have hξR : ξ ∈ R := by
+        refine mem_sep_iff.mpr ⟨hξβ, ?_⟩
+        intro η hηξ
+        have hηβ : η ∈ β := hβ.toIsTransitive.transitive _ hξβ _ hηξ
+        have hfηα : f ‘ η ∈ α := hCof.1 _ (value_mem_range hfFun hηβ)
+        have hfηord : IsOrdinal (f ‘ η) := hα.1.of_mem hfηα
+        letI : IsOrdinal (f ‘ η) := hfηord
+        letI : IsOrdinal (f ‘ ξ) := hfξord
+        rcases IsOrdinal.mem_trichotomy (α := f ‘ η) (β := f ‘ ξ) with (hηξ' | hEq | hξη')
+        · exact hηξ'
+        · have hzfη : z ∈ f ‘ η := by simpa [hEq] using hzfξ
+          have hξsubη : ξ ⊆ η := hξleast η (hβ.of_mem hηβ) ⟨hηβ, hzfη⟩
+          exact False.elim ((mem_irrefl η) (hξsubη _ hηξ))
+        · have hzfη : z ∈ f ‘ η :=
+            hfηord.toIsTransitive.transitive _ hξη' _ hzfξ
+          have hξsubη : ξ ⊆ η := hξleast η (hβ.of_mem hηβ) ⟨hηβ, hzfη⟩
+          exact False.elim ((mem_irrefl η) (hξsubη _ hηξ))
+      have hξRangeE : ξ ∈ range e := by rw [he.range_eq]; exact hξR
+      rcases mem_range_iff.mp hξRangeE with ⟨u, hue⟩
+      have hξpair : ⟨ξ, f ‘ ξ⟩ₖ ∈ f := by
+        have hξdom : ξ ∈ domain f := by simpa [domain_eq_of_mem_function hfFun] using hξβ
+        exact (IsFunction.value_eq_iff_kpair_mem (f := f) (x := ξ) (y := f ‘ ξ) hξdom).mp rfl
+      have hug : ⟨u, f ‘ ξ⟩ₖ ∈ g := by
+        show ⟨u, f ‘ ξ⟩ₖ ∈ compose e f
+        exact kpair_mem_compose_iff.mpr ⟨ξ, hue, hξpair⟩
+      exact mem_sUnion_iff.mpr ⟨f ‘ ξ, mem_range_iff.mpr ⟨u, hug⟩, hzfξ⟩
+  have hγsubβ : γ ⊆ β := by
+    simpa [γ] using wellOrderTypeVal_memRelOn_subset_subset (α := β) (X := R) hRsub
+  exact ⟨γ, hγord, hγsubβ, g, ⟨hgStrict, hgCof⟩⟩
+
+lemma not_isCofinal_range_of_mem_function_of_mem_cofinality [V ⊧ₘ* 𝗭𝗙]
+    {f β α : V}
+    (hα : IsLimitOrdinal α) (hβ : β ∈ cofinality α)
+    (hf : f ∈ α ^ β) :
+    ¬ IsCofinal (range f) α := by
+  have hHas : HasCofinalFunction α := hasCofinalFunction_of_isLimitOrdinal hα
+  have hcofOrd : IsOrdinal (cofinality α) := cofinality_isOrdinal hHas
+  have hβord : IsOrdinal β := hcofOrd.of_mem hβ
+  intro hCof
+  rcases exists_isCofinalFunction_subset_of_mem_function_of_isCofinal hβord hα hf hCof with
+    ⟨γ, hγord, hγsubβ, g, hg⟩
+  have hcofSubβ : cofinality α ⊆ β :=
+    subset_trans (cofinality_least hHas hγord ⟨g, hg⟩) hγsubβ
+  letI : IsOrdinal β := hβord
+  letI : IsOrdinal (cofinality α) := hcofOrd
+  rcases (IsOrdinal.subset_iff (α := cofinality α) (β := β)).1 hcofSubβ with (hEq | hcofβ)
+  · have : cofinality α ∈ cofinality α := by
+      simp [hEq] at hβ
+    exact mem_irrefl (cofinality α) this
+  · have : cofinality α ∈ cofinality α :=
+      hcofOrd.toIsTransitive.transitive _ hβ _ hcofβ
+    exact mem_irrefl (cofinality α) this
+
+lemma exists_isCofinalFunction_subset_of_isNondecreasingFunction_of_isCofinal [V ⊧ₘ* 𝗭𝗙]
+    {f β α : V}
+    (hβ : IsOrdinal β) (hα : IsLimitOrdinal α)
+    (hf : IsNondecreasingFunction f β α)
+    (hCof : IsCofinal (range f) α) :
+    ∃ γ : V, IsOrdinal γ ∧ γ ⊆ β ∧ ∃ g : V, IsCofinalFunction g γ α := by
+  exact exists_isCofinalFunction_subset_of_mem_function_of_isCofinal
+    hβ hα hf.mem_function hCof
+
+private lemma replacement_graph_exists_on_of_definableRelation [V ⊧ₘ* 𝗭𝗙]
+    (X : V) (R : V → V → Prop) (hR : ℒₛₑₜ-relation[V] R)
+    (hfun : ∀ x : V, x ∈ X → ∃! y : V, R x y) :
+    ∃ f : V, IsFunction f ∧ domain f = X ∧
+      ∀ x ∈ X, ∀ y, ⟨x, y⟩ₖ ∈ f ↔ R x y := by
+  let S : V → V → Prop := fun x p ↦ ∃ y : V, R x y ∧ p = ⟨x, y⟩ₖ
+  have hS : ℒₛₑₜ-relation[V] S := by
+    letI : ℒₛₑₜ-relation[V] R := hR
+    change ℒₛₑₜ-relation[V] (fun x p ↦ ∃ y : V, R x y ∧ p = ⟨x, y⟩ₖ)
+    definability
+  have hfunS : ∀ x : V, x ∈ X → ∃! p : V, S x p := by
+    intro x hx
+    rcases hfun x hx with ⟨y, hy, hyu⟩
+    refine ⟨⟨x, y⟩ₖ, ⟨y, hy, rfl⟩, ?_⟩
+    intro p hp
+    rcases hp with ⟨y', hy', hp⟩
+    have : y' = y := hyu _ hy'
+    rcases this
+    simp [hp]
+  rcases replacement_exists_on (X := X) S hS hfunS with ⟨f, hf⟩
+  have hmem : ∀ p : V, p ∈ f ↔ ∃ x ∈ X, ∃ y, R x y ∧ p = ⟨x, y⟩ₖ := by
+    intro p
+    constructor
+    · intro hp
+      rcases (hf p).1 hp with ⟨x, hxX, hpS⟩
+      rcases hpS with ⟨y, hy, rfl⟩
+      exact ⟨x, hxX, y, hy, rfl⟩
+    · rintro ⟨x, hxX, y, hy, rfl⟩
+      exact (hf _).2 ⟨x, hxX, ⟨y, hy, rfl⟩⟩
+  have hgraph : ∀ x ∈ X, ∀ y, ⟨x, y⟩ₖ ∈ f ↔ R x y := by
+    intro x hxX y
+    constructor
+    · intro hxy
+      rcases (hmem _).1 hxy with ⟨x', hx'X, y', hy', hxy'⟩
+      rcases kpair_inj hxy' with ⟨rfl, rfl⟩
+      exact hy'
+    · intro hxy
+      exact (hmem _).2 ⟨x, hxX, y, hxy, rfl⟩
+  have hfFun : f ∈ range f ^ X := by
+    apply mem_function.intro
+    · intro p hp
+      rcases (hmem _).1 hp with ⟨x, hxX, y, -, rfl⟩
+      simpa [mem_prod_iff] using And.intro hxX (mem_range_iff.mpr ⟨x, by simpa⟩)
+    · intro x hxX
+      rcases hfun x hxX with ⟨y, hy, hyu⟩
+      refine ⟨y, (hgraph x hxX y).2 hy, ?_⟩
+      intro y' hxy'
+      exact hyu _ ((hgraph x hxX y').1 hxy')
+  exact ⟨f, IsFunction.of_mem hfFun, domain_eq_of_mem_function hfFun, hgraph⟩
+
+private lemma range_cardLE_of_mem_function_of_subset_of_isOrdinal [V ⊧ₘ* 𝗭𝗙]
+    {f A β X : V}
+    (hβ : IsOrdinal β) (hAβ : A ⊆ β) (hf : f ∈ X ^ A) :
+    range f ≤# β := by
+  let R : V → V → Prop := fun y ξ ↦
+    ξ ∈ A ∧ f ‘ ξ = y ∧
+      ∀ ν : V, IsOrdinal ν → ν ∈ A → f ‘ ν = y → ξ ⊆ ν
+  have hR : ℒₛₑₜ-relation[V] R := by
+    letI : ℒₛₑₜ-function₂[V] value := value.definable
+    change ℒₛₑₜ-relation[V] (fun y ξ ↦
+      ξ ∈ A ∧ f ‘ ξ = y ∧
+        ∀ ν : V, IsOrdinal ν → ν ∈ A → f ‘ ν = y → ξ ⊆ ν)
+    definability
+  have hfun : ∀ y : V, y ∈ range f → ∃! ξ : V, R y ξ := by
+    intro y hyRange
+    let Q : V → Prop := fun ξ ↦ ξ ∈ A ∧ f ‘ ξ = y
+    have hQ : ℒₛₑₜ-predicate[V] Q := by
+      letI : ℒₛₑₜ-function₂[V] value := value.definable
+      change ℒₛₑₜ-predicate[V] (fun ξ ↦ ξ ∈ A ∧ f ‘ ξ = y)
+      definability
+    have hEx : ∃ ξ : V, IsOrdinal ξ ∧ Q ξ := by
+      rcases mem_range_iff.mp hyRange with ⟨ξ₀, hξ₀pair⟩
+      have hξ₀A : ξ₀ ∈ A := (mem_of_mem_functions hf hξ₀pair).1
+      refine ⟨ξ₀, IsOrdinal.of_mem (hAβ _ hξ₀A), hξ₀A, ?_⟩
+      exact value_eq_of_kpair_mem hf hξ₀pair
+    rcases exists_least_ordinal_of_exists (P := Q) hQ hEx with
+      ⟨ξ, hξord, hξQ, hξleast⟩
+    refine ⟨ξ, ⟨hξQ.1, hξQ.2, ?_⟩, ?_⟩
+    · intro ν hνord hνA hfy
+      exact hξleast ν hνord ⟨hνA, hfy⟩
+    · intro μ hμ
+      rcases hμ with ⟨hμA, hfμ, hμleast⟩
+      exact subset_antisymm
+        (hμleast ξ hξord hξQ.1 hξQ.2)
+        (hξleast μ (IsOrdinal.of_mem (hAβ _ hμA)) ⟨hμA, hfμ⟩)
+  rcases replacement_graph_exists_on_of_definableRelation (X := range f) R hR hfun with
+    ⟨s, hsFunc, hsDom, hsGraph⟩
+  letI : IsFunction s := hsFunc
+  have hsRangeSub : range s ⊆ β := by
+    intro ξ hξRange
+    rcases mem_range_iff.mp hξRange with ⟨y, hyξ⟩
+    have hyRange : y ∈ range f := by
+      simpa [hsDom] using mem_domain_of_kpair_mem hyξ
+    exact hAβ _ ((hsGraph y hyRange ξ).1 hyξ).1
+  have hsFun : s ∈ β ^ range f := by
+    apply mem_function.intro
+    · intro p hp
+      rcases show ∃ y ∈ domain s, ∃ ξ ∈ range s, p = ⟨y, ξ⟩ₖ from by
+          simpa [mem_prod_iff] using subset_prod_of_mem_function (IsFunction.mem_function s) _ hp with
+        ⟨y, hyDom, ξ, hξRange, rfl⟩
+      have hyRange : y ∈ range f := by simpa [hsDom] using hyDom
+      have hξβ : ξ ∈ β := hsRangeSub _ hξRange
+      exact mem_prod_iff.mpr ⟨y, hyRange, ξ, hξβ, rfl⟩
+    · intro y hyRange
+      rcases hfun y hyRange with ⟨ξ, hξ, hξuniq⟩
+      refine ⟨ξ, (hsGraph y hyRange ξ).2 hξ, ?_⟩
+      intro ξ' hyξ'
+      exact hξuniq _ ((hsGraph y hyRange ξ').1 hyξ')
+  have hsInj : Injective s := by
+    intro y₁ y₂ ξ hy₁ hy₂
+    have hy₁Range : y₁ ∈ range f := by
+      simpa [hsDom] using mem_domain_of_kpair_mem hy₁
+    have hy₂Range : y₂ ∈ range f := by
+      simpa [hsDom] using mem_domain_of_kpair_mem hy₂
+    have hR₁ : R y₁ ξ := (hsGraph y₁ hy₁Range ξ).1 hy₁
+    have hR₂ : R y₂ ξ := (hsGraph y₂ hy₂Range ξ).1 hy₂
+    exact hR₁.2.1.symm.trans hR₂.2.1
+  exact ⟨s, hsFun, hsInj⟩
+
+private lemma cardLE_power_of_nonempty_domain [V ⊧ₘ* 𝗭𝗙] {X Y : V} [IsNonempty X] :
+    Y ≤# Y ^ X := by
+  let R : V → V → Prop := fun y g ↦
+    y ∈ Y ∧ g ∈ Y ^ X ∧ ∀ ξ ∈ X, ∀ z, ⟨ξ, z⟩ₖ ∈ g ↔ z = y
+  have hR : ℒₛₑₜ-relation[V] R := by
+    change ℒₛₑₜ-relation[V] (fun y g ↦
+      y ∈ Y ∧ g ∈ Y ^ X ∧ ∀ ξ ∈ X, ∀ z, ⟨ξ, z⟩ₖ ∈ g ↔ z = y)
+    definability
+  have hfun : ∀ y : V, y ∈ Y → ∃! g : V, R y g := by
+    intro y hyY
+    have hConstDef : ℒₛₑₜ-function₁[V] (fun _ : V ↦ y) := by
+      change ℒₛₑₜ-function₁[V] (fun _ : V ↦ y)
+      definability
+    rcases graph_exists_mem_function_of_definableFunction
+        X Y (fun _ : V ↦ y) hConstDef (fun _ _ ↦ hyY) with
+      ⟨g, hgFun, hgGraph⟩
+    refine ⟨g, ⟨hyY, hgFun, ?_⟩, ?_⟩
+    · intro ξ hξX z
+      simpa using hgGraph ξ hξX z
+    · intro g' hg'
+      rcases hg' with ⟨-, hg'Fun, hg'Graph⟩
+      apply subset_antisymm
+      · intro p hp
+        rcases show ∃ ξ ∈ X, ∃ z ∈ Y, p = ⟨ξ, z⟩ₖ from by
+            simpa [mem_prod_iff] using subset_prod_of_mem_function hg'Fun _ hp with
+          ⟨ξ, hξX, z, hzY, rfl⟩
+        have hzy : z = y := (hg'Graph ξ hξX z).1 hp
+        exact (hgGraph ξ hξX z).2 hzy
+      · intro p hp
+        rcases show ∃ ξ ∈ X, ∃ z ∈ Y, p = ⟨ξ, z⟩ₖ from by
+            simpa [mem_prod_iff] using subset_prod_of_mem_function hgFun _ hp with
+          ⟨ξ, hξX, z, hzY, rfl⟩
+        have hzy : z = y := (hgGraph ξ hξX z).1 hp
+        exact (hg'Graph ξ hξX z).2 hzy
+  rcases replacement_graph_exists_on_of_definableRelation (X := Y) R hR hfun with
+    ⟨s, hsFunc, hsDom, hsGraph⟩
+  letI : IsFunction s := hsFunc
+  have hsRangeSub : range s ⊆ Y ^ X := by
+    intro g hgRange
+    rcases mem_range_iff.mp hgRange with ⟨y, hyg⟩
+    have hyY : y ∈ Y := by simpa [hsDom] using mem_domain_of_kpair_mem hyg
+    exact ((hsGraph y hyY g).1 hyg).2.1
+  have hsFun : s ∈ (Y ^ X) ^ Y := by
+    apply mem_function.intro
+    · intro p hp
+      rcases show ∃ y ∈ domain s, ∃ g ∈ range s, p = ⟨y, g⟩ₖ from by
+          simpa [mem_prod_iff] using subset_prod_of_mem_function (IsFunction.mem_function s) _ hp with
+        ⟨y, hyDom, g, hgRange, rfl⟩
+      have hyY : y ∈ Y := by simpa [hsDom] using hyDom
+      have hgPow : g ∈ Y ^ X := hsRangeSub _ hgRange
+      exact mem_prod_iff.mpr ⟨y, hyY, g, hgPow, rfl⟩
+    · intro y hyY
+      rcases hfun y hyY with ⟨g, hg, hguniq⟩
+      refine ⟨g, (hsGraph y hyY g).2 hg, ?_⟩
+      intro g' hyg'
+      exact hguniq _ ((hsGraph y hyY g').1 hyg')
+  rcases IsNonempty.nonempty (a := X) with ⟨x₀, hx₀X⟩
+  have hsInj : Injective s := by
+    intro y₁ y₂ g hy₁ hy₂
+    have hy₁Y : y₁ ∈ Y := by simpa [hsDom] using mem_domain_of_kpair_mem hy₁
+    have hy₂Y : y₂ ∈ Y := by simpa [hsDom] using mem_domain_of_kpair_mem hy₂
+    rcases (hsGraph y₁ hy₁Y g).1 hy₁ with ⟨-, -, hGraph₁⟩
+    rcases (hsGraph y₂ hy₂Y g).1 hy₂ with ⟨-, -, hGraph₂⟩
+    have hx₂ : ⟨x₀, y₂⟩ₖ ∈ g := (hGraph₂ x₀ hx₀X y₂).2 rfl
+    exact ((hGraph₁ x₀ hx₀X y₂).1 hx₂).symm
+  exact ⟨s, hsFun, hsInj⟩
+
+lemma cofinality_codomain_subset_domain_of_isNondecreasingFunction_of_isCofinal [V ⊧ₘ* 𝗭𝗙]
+    {f β α : V}
+    (hβ : IsOrdinal β) (hα : IsLimitOrdinal α)
+    (hf : IsNondecreasingFunction f β α)
+    (hCof : IsCofinal (range f) α) :
+    cofinality α ⊆ cofinality β := by
+  have hβlim : IsLimitOrdinal β :=
+    isLimitOrdinal_of_isNondecreasingFunction_of_isCofinal hβ hα hf hCof
+  have hHasα : HasCofinalFunction α := hasCofinalFunction_of_isLimitOrdinal hα
+  have hHasβ : HasCofinalFunction β := hasCofinalFunction_of_isLimitOrdinal hβlim
+  rcases cofinality_hasFunction hHasβ with ⟨g, hg⟩
+  have hcompNondec : IsNondecreasingFunction (compose g f) (cofinality β) α :=
+    IsNondecreasingFunction.comp_isCofinalFunction hg hf
+  have hcompCof : IsCofinal (range (compose g f)) α :=
+    IsNondecreasingFunction.isCofinal_comp_isCofinalFunction hg hf hCof hα.1
+  rcases exists_isCofinalFunction_subset_of_isNondecreasingFunction_of_isCofinal
+      (hβ := cofinality_isOrdinal hHasβ) (hα := hα) hcompNondec hcompCof with
+    ⟨γ, hγord, hγsub, hγf, hhγf⟩
+  exact subset_trans (cofinality_least hHasα hγord ⟨hγf, hhγf⟩) hγsub
+
+lemma cofinality_domain_subset_codomain_of_isNondecreasingFunction_of_isCofinal [V ⊧ₘ* 𝗭𝗙]
+    {f β α : V}
+    (hβ : IsOrdinal β) (hα : IsLimitOrdinal α)
+    (hf : IsNondecreasingFunction f β α)
+    (hCof : IsCofinal (range f) α) :
+    cofinality β ⊆ cofinality α := by
+  have hfFun : f ∈ α ^ β := hf.mem_function
+  have hβlim : IsLimitOrdinal β :=
+    isLimitOrdinal_of_isNondecreasingFunction_of_isCofinal hβ hα hf hCof
+  have hHasα : HasCofinalFunction α := hasCofinalFunction_of_isLimitOrdinal hα
+  have hHasβ : HasCofinalFunction β := hasCofinalFunction_of_isLimitOrdinal hβlim
+  let δ : V := cofinality α
+  have hδord : IsOrdinal δ := cofinality_isOrdinal hHasα
+  rcases cofinality_hasFunction hHasα with ⟨g, hg⟩
+  have hgFun : g ∈ α ^ δ := hg.mem_function
+  let Hit : V → V → Prop := fun ξ η ↦
+    η ∈ β ∧ g ‘ ξ ∈ f ‘ η ∧
+      ∀ ν : V, IsOrdinal ν → ν ∈ β → g ‘ ξ ∈ f ‘ ν → η ⊆ ν
+  have hHitDef : ℒₛₑₜ-relation[V] Hit := by
+    letI : ℒₛₑₜ-function₂[V] value := value.definable
+    change ℒₛₑₜ-relation[V] (fun ξ η ↦
+      η ∈ β ∧ g ‘ ξ ∈ f ‘ η ∧
+        ∀ ν : V, IsOrdinal ν → ν ∈ β → g ‘ ξ ∈ f ‘ ν → η ⊆ ν)
+    definability
+  have hHitFun : ∀ ξ : V, ξ ∈ δ → ∃! η : V, Hit ξ η := by
+    intro ξ hξδ
+    let Q : V → Prop := fun η ↦ η ∈ β ∧ g ‘ ξ ∈ f ‘ η
+    have hQ : ℒₛₑₜ-predicate[V] Q := by
+      letI : ℒₛₑₜ-function₂[V] value := value.definable
+      change ℒₛₑₜ-predicate[V] (fun η ↦ η ∈ β ∧ g ‘ ξ ∈ f ‘ η)
+      definability
+    have hEx : ∃ η : V, IsOrdinal η ∧ Q η := by
+      have hgξα : g ‘ ξ ∈ α := hg.isCofinal.1 _ (value_mem_range hgFun hξδ)
+      have hgξUnion : g ‘ ξ ∈ ⋃ˢ range f := by rw [hCof.2]; exact hgξα
+      rcases mem_sUnion_iff.mp hgξUnion with ⟨y, hyRangeF, hξy⟩
+      rcases mem_range_iff.mp hyRangeF with ⟨η₀, hη₀pair⟩
+      have hη₀β : η₀ ∈ β := (mem_of_mem_functions hfFun hη₀pair).1
+      have hη₀val : f ‘ η₀ = y := value_eq_of_kpair_mem hfFun hη₀pair
+      refine ⟨η₀, hβ.of_mem hη₀β, hη₀β, ?_⟩
+      simpa [hη₀val] using hξy
+    rcases exists_least_ordinal_of_exists (P := Q) hQ hEx with ⟨η, hηord, hηQ, hηleast⟩
+    refine ⟨η, ?_, ?_⟩
+    · exact ⟨hηQ.1, hηQ.2, fun ν hνord hνβ hξν ↦ hηleast ν hνord ⟨hνβ, hξν⟩⟩
+    · intro μ hμ
+      exact subset_antisymm
+        (hμ.2.2 η hηord hηQ.1 hηQ.2)
+        (hηleast μ (hβ.of_mem hμ.1) ⟨hμ.1, hμ.2.1⟩)
+  rcases replacement_graph_exists_on_of_definableRelation (X := δ) Hit hHitDef hHitFun with
+    ⟨s, hsFunction, hsDom, hsGraph⟩
+  letI : IsFunction s := hsFunction
+  have hsRangeSub : range s ⊆ β := by
+    intro η hηRange
+    rcases mem_range_iff.mp hηRange with ⟨ξ, hξη⟩
+    have hξδ : ξ ∈ δ := by simpa [hsDom] using mem_domain_of_kpair_mem hξη
+    exact ((hsGraph ξ hξδ η).1 hξη).1
+  have hsFun : s ∈ β ^ δ := by
+    apply mem_function.intro
+    · intro p hp
+      rcases show ∃ ξ ∈ domain s, ∃ η ∈ range s, p = ⟨ξ, η⟩ₖ from by
+          simpa [mem_prod_iff] using subset_prod_of_mem_function (IsFunction.mem_function s) _ hp with
+        ⟨ξ, hξdom, η, hηRange, rfl⟩
+      have hξδ : ξ ∈ δ := by simpa [hsDom] using hξdom
+      have hηβ : η ∈ β := hsRangeSub _ hηRange
+      exact mem_prod_iff.mpr ⟨ξ, hξδ, η, hηβ, rfl⟩
+    · intro ξ hξδ
+      rcases hHitFun ξ hξδ with ⟨η, hη, hηuniq⟩
+      refine ⟨η, (hsGraph ξ hξδ η).2 hη, ?_⟩
+      intro η' hξη'
+      exact hηuniq _ ((hsGraph ξ hξδ η').1 hξη')
+  have hsNondec : IsNondecreasingFunction s δ β := by
+    refine ⟨hsFun, ?_⟩
+    intro ξ hξδ ζ hζδ hξζ
+    have hsξβ : s ‘ ξ ∈ β := hsRangeSub _ (value_mem_range hsFun hξδ)
+    have hsζβ : s ‘ ζ ∈ β := hsRangeSub _ (value_mem_range hsFun hζδ)
+    have hξdom : ξ ∈ domain s := by simpa [domain_eq_of_mem_function hsFun] using hξδ
+    have hζdom : ζ ∈ domain s := by simpa [domain_eq_of_mem_function hsFun] using hζδ
+    have hξpair : ⟨ξ, s ‘ ξ⟩ₖ ∈ s :=
+      (IsFunction.value_eq_iff_kpair_mem (f := s) (x := ξ) (y := s ‘ ξ) hξdom).mp rfl
+    have hζpair : ⟨ζ, s ‘ ζ⟩ₖ ∈ s :=
+      (IsFunction.value_eq_iff_kpair_mem (f := s) (x := ζ) (y := s ‘ ζ) hζdom).mp rfl
+    have hHitξ : Hit ξ (s ‘ ξ) := (hsGraph ξ hξδ (s ‘ ξ)).1 hξpair
+    have hHitζ : Hit ζ (s ‘ ζ) := (hsGraph ζ hζδ (s ‘ ζ)).1 hζpair
+    have hfsζα : f ‘ (s ‘ ζ) ∈ α := hCof.1 _ (value_mem_range hfFun hsζβ)
+    have hfsζord : IsOrdinal (f ‘ (s ‘ ζ)) := hα.1.of_mem hfsζα
+    have hgξζ : g ‘ ξ ∈ g ‘ ζ := hg.1.2 _ hξδ _ hζδ hξζ
+    have hgξfsζ : g ‘ ξ ∈ f ‘ (s ‘ ζ) :=
+      hfsζord.toIsTransitive.transitive _ hHitζ.2.1 _ hgξζ
+    exact hHitξ.2.2 _ (hβ.of_mem hsζβ) hsζβ hgξfsζ
+  have hsCof : IsCofinal (range s) β := by
+    refine ⟨hsRangeSub, ?_⟩
+    ext η
+    constructor
+    · intro hηUnion
+      rcases mem_sUnion_iff.mp hηUnion with ⟨y, hyRange, hηy⟩
+      have hyβ : y ∈ β := hsRangeSub _ hyRange
+      exact hβ.toIsTransitive.transitive _ hyβ _ hηy
+    · intro hηβ
+      have hfηα : f ‘ η ∈ α := hCof.1 _ (value_mem_range hfFun hηβ)
+      have hfηUnion : f ‘ η ∈ ⋃ˢ range g := by rw [hg.isCofinal.2]; exact hfηα
+      rcases mem_sUnion_iff.mp hfηUnion with ⟨y, hyRangeG, hfηy⟩
+      rcases mem_range_iff.mp hyRangeG with ⟨ξ, hξpairG⟩
+      have hξδ : ξ ∈ δ := (mem_of_mem_functions hgFun hξpairG).1
+      have hξval : g ‘ ξ = y := value_eq_of_kpair_mem hgFun hξpairG
+      have hsξβ : s ‘ ξ ∈ β := hsRangeSub _ (value_mem_range hsFun hξδ)
+      have hξdom : ξ ∈ domain s := by simpa [domain_eq_of_mem_function hsFun] using hξδ
+      have hξpairS : ⟨ξ, s ‘ ξ⟩ₖ ∈ s :=
+        (IsFunction.value_eq_iff_kpair_mem (f := s) (x := ξ) (y := s ‘ ξ) hξdom).mp rfl
+      have hHitξ : Hit ξ (s ‘ ξ) := (hsGraph ξ hξδ (s ‘ ξ)).1 hξpairS
+      have hfηord : IsOrdinal (f ‘ η) := hα.1.of_mem hfηα
+      have hEqImpossible : η = s ‘ ξ → False := by
+        intro hEq
+        have hgξfη : g ‘ ξ ∈ f ‘ η := by simpa [hEq] using hHitξ.2.1
+        have : f ‘ η ∈ f ‘ η :=
+          hfηord.toIsTransitive.transitive _ hgξfη _ (by simpa [hξval] using hfηy)
+        exact (mem_irrefl (f ‘ η)) this
+      have hLtImpossible : s ‘ ξ ∈ η → False := by
+        intro hsξη
+        have hsub : f ‘ (s ‘ ξ) ⊆ f ‘ η := hf.2 _ hsξβ _ hηβ hsξη
+        have hgξfη : g ‘ ξ ∈ f ‘ η := hsub _ hHitξ.2.1
+        have : f ‘ η ∈ f ‘ η :=
+          hfηord.toIsTransitive.transitive _ hgξfη _ (by simpa [hξval] using hfηy)
+        exact (mem_irrefl (f ‘ η)) this
+      letI : IsOrdinal η := hβ.of_mem hηβ
+      letI : IsOrdinal (s ‘ ξ) := hβ.of_mem hsξβ
+      rcases IsOrdinal.mem_trichotomy (α := η) (β := s ‘ ξ) with (hηs | hEq | hsη)
+      · exact mem_sUnion_iff.mpr ⟨s ‘ ξ, value_mem_range hsFun hξδ, hηs⟩
+      · exact False.elim (hEqImpossible hEq)
+      · exact False.elim (hLtImpossible hsη)
+  rcases exists_isCofinalFunction_subset_of_isNondecreasingFunction_of_isCofinal
+      (hβ := hδord) (hα := hβlim) hsNondec hsCof with
+    ⟨γ, hγord, hγsub, hγf, hhγf⟩
+  exact subset_trans (cofinality_least hHasβ hγord ⟨hγf, hhγf⟩) hγsub
+
+lemma cofinality_eq_of_isNondecreasingFunction_of_isCofinal [V ⊧ₘ* 𝗭𝗙]
+    {f β α : V}
+    (hβ : IsOrdinal β) (hα : IsLimitOrdinal α)
+    (hf : IsNondecreasingFunction f β α)
+    (hCof : IsCofinal (range f) α) :
+    cofinality β = cofinality α := by
+  exact subset_antisymm
+    (cofinality_domain_subset_codomain_of_isNondecreasingFunction_of_isCofinal hβ hα hf hCof)
+    (cofinality_codomain_subset_domain_of_isNondecreasingFunction_of_isCofinal hβ hα hf hCof)
+
+lemma cofinality_mem_of_isLimitOrdinal_of_not_isCardinal [V ⊧ₘ* 𝗭𝗙] {α : V}
+    (hα : IsLimitOrdinal α) (hNotCard : ¬ IsCardinal α) :
+    cofinality α ∈ α := by
+  have hWitness : ∃ β : V, β ∈ α ∧ β ≋ α := by
+    by_contra hNo
+    apply hNotCard
+    refine ⟨hα.1, ?_⟩
+    intro β hβα hβeq
+    exact hNo ⟨β, hβα, hβeq⟩
+  rcases hWitness with ⟨β, hβα, hβeq⟩
+  have hβord : IsOrdinal β := hα.1.of_mem hβα
+  rcases CardEQ.exists_bijective (V := V) hβeq with ⟨f, hfBij⟩
+  have hRangeCof : IsCofinal (range f) α := by
+    refine ⟨?_, ?_⟩
+    · simp [hfBij.range_eq]
+    · simpa [hfBij.range_eq] using hα.sUnion_eq
+  have hHasα : HasCofinalFunction α := hasCofinalFunction_of_isLimitOrdinal hα
+  rcases exists_isCofinalFunction_subset_of_mem_function_of_isCofinal
+      hβord hα hfBij.mem_function hRangeCof with
+    ⟨γ, hγord, hγsubβ, g, hg⟩
+  have hcofsubβ : cofinality α ⊆ β :=
+    subset_trans (cofinality_least hHasα hγord ⟨g, hg⟩) hγsubβ
+  letI : IsOrdinal (cofinality α) := cofinality_isOrdinal hHasα
+  letI : IsOrdinal β := hβord
+  rcases (IsOrdinal.subset_iff (α := cofinality α) (β := β)).1 hcofsubβ with (hEq | hMem)
+  · exact hEq.symm ▸ hβα
+  · exact hα.1.toIsTransitive.transitive _ hβα _ hMem
+
+def IsLimitCardinal [V ⊧ₘ* 𝗭𝗙] (κ : V) : Prop :=
+  IsCardinal κ ∧ (ω : V) ⊆ κ ∧ ¬ ∃ ξ : V, κ = hartogs ξ
+
+instance IsLimitCardinal.definable [V ⊧ₘ* 𝗭𝗙] : ℒₛₑₜ-predicate[V] IsLimitCardinal := by
+  letI : ℒₛₑₜ-function₁[V] hartogs := hartogs.definable
+  unfold IsLimitCardinal
+  definability
+
+def IsRegular (κ : V) : Prop := cofinality κ = κ
+
+instance IsRegular.definable : ℒₛₑₜ-predicate[V] IsRegular := by
+  letI : ℒₛₑₜ-function₁[V] cofinality := cofinality.definable
+  unfold IsRegular
+  definability
+
+def IsWeaklyInaccessible [V ⊧ₘ* 𝗭𝗙] (κ : V) : Prop :=
+  IsLimitCardinal κ ∧ IsRegular κ
+
+instance IsWeaklyInaccessible.definable [V ⊧ₘ* 𝗭𝗙] :
+    ℒₛₑₜ-predicate[V] IsWeaklyInaccessible := by
+  letI : ℒₛₑₜ-predicate[V] IsLimitCardinal := IsLimitCardinal.definable
+  unfold IsWeaklyInaccessible
+  definability
+
+lemma cofinality_isCardinal_of_isLimitOrdinal [V ⊧ₘ* 𝗭𝗙] {α : V}
+    (hα : IsLimitOrdinal α) :
+    IsCardinal (cofinality α) := by
+  have hcofLim : IsLimitOrdinal (cofinality α) :=
+    cofinality_isLimitOrdinal_of_isLimitOrdinal hα
+  by_contra hNotCard
+  have hmem : cofinality (cofinality α) ∈ cofinality α :=
+    cofinality_mem_of_isLimitOrdinal_of_not_isCardinal hcofLim hNotCard
+  have hEq : cofinality (cofinality α) = cofinality α :=
+    cofinality_cofinality_eq_of_isLimitOrdinal hα
+  exact mem_irrefl (cofinality (cofinality α)) (hEq.symm ▸ hmem)
+
+lemma cofinality_isRegular_of_isLimitOrdinal [V ⊧ₘ* 𝗭𝗙] {α : V}
+    (hα : IsLimitOrdinal α) :
+    IsRegular (cofinality α) := by
+  exact cofinality_cofinality_eq_of_isLimitOrdinal hα
+
+lemma cofinality_isRegularCardinal_of_isLimitOrdinal [V ⊧ₘ* 𝗭𝗙] {α : V}
+    (hα : IsLimitOrdinal α) :
+    IsCardinal (cofinality α) ∧ IsRegular (cofinality α) := by
+  exact ⟨cofinality_isCardinal_of_isLimitOrdinal hα, cofinality_isRegular_of_isLimitOrdinal hα⟩
+
 lemma exists_isCardinal_cardEQ_of_wellOrderOn [V ⊧ₘ* 𝗭𝗙] {S Y : V}
     (hSwo : IsWellOrderOn S Y) :
     ∃ κ, IsCardinal κ ∧ κ ≋ Y := by
@@ -1606,6 +2764,223 @@ lemma exists_isCardinal_cardEQ_of_wellOrderOn [V ⊧ₘ* 𝗭𝗙] {S Y : V}
     exact CardEQ.of_bijective (IsOrderIso.bijective hf)
   rcases exists_isCardinal_cardEQ_of_isOrdinal (V := V) hαord with ⟨κ, hκ, hkα⟩
   exact ⟨κ, hκ, CardEQ.trans hkα hαY⟩
+
+lemma cofinality_subset_card_of_isCofinal [V ⊧ₘ* 𝗭𝗙] {α X : V}
+    (hα : IsLimitOrdinal α) (hX : IsCofinal X α) :
+    cofinality α ⊆ card X := by
+  letI : IsOrdinal α := hα.1
+  let hXwo : IsWellOrderOn (IsOrdinal.memRelOn X) X :=
+    IsOrdinal.wellOrderOn_memRelOn_subset (α := α) hX.1
+  let β : V := Ordinal.wellOrderTypeVal (IsOrdinal.memRelOn X) X hXwo
+  have hXcard : ∃ κ, IsCardinal κ ∧ κ ≋ X :=
+    exists_isCardinal_cardEQ_of_wellOrderOn (V := V) hXwo
+  have hcofCard : IsCardinal (cofinality α) :=
+    cofinality_isCardinal_of_isLimitOrdinal hα
+  have hcardCof : card (cofinality α) = cofinality α := by
+    symm
+    exact (card_eq_iff (cofinality α) (cofinality α)).2 <| Or.inl ⟨hcofCard, CardEQ.refl _⟩
+  rcases Ordinal.wellOrderType_isOrderIso (S := IsOrdinal.memRelOn X) (Y := X) (hSwo := hXwo) with
+    ⟨f, hf⟩
+  have hβX : β ≋ X := CardEQ.of_bijective (IsOrderIso.bijective hf)
+  have hcofβ : cofinality α ⊆ β :=
+    cofinality_subset_wellOrderTypeVal_memRelOn_of_isCofinal hα hX
+  have hcofX : cofinality α ≤# X :=
+    (cardLE_of_subset hcofβ).trans hβX.le
+  simpa [hcardCof] using
+    (cardLE_iff_card_subset_card (V := V) (X := cofinality α) (Y := X)
+      ⟨cofinality α, hcofCard, CardEQ.refl _⟩ hXcard).1 hcofX
+
+lemma not_isCofinal_of_card_mem_cofinality [V ⊧ₘ* 𝗭𝗙] {α X : V}
+    (hα : IsLimitOrdinal α) (hcardX : card X ∈ cofinality α) :
+    ¬ IsCofinal X α := by
+  intro hX
+  have hsub : cofinality α ⊆ card X :=
+    cofinality_subset_card_of_isCofinal (V := V) hα hX
+  exact mem_irrefl (card X) (hsub (card X) hcardX)
+
+lemma hasSmallCoveringFunction_of_isCardinal_of_ω_subset [V ⊧ₘ* 𝗭𝗙] {κ : V}
+    (hκ : IsCardinal κ) (hωκ : (ω : V) ⊆ κ) :
+    HasSmallCoveringFunction κ := by
+  have hκlim : IsLimitOrdinal κ := isLimitOrdinal_of_isCardinal_of_ω_subset hκ hωκ
+  have hHasCof : HasCofinalFunction κ := hasCofinalFunction_of_isLimitOrdinal hκlim
+  rcases cofinality_hasFunction hHasCof with ⟨f, hf⟩
+  have hfPow : f ∈ ℘ κ ^ cofinality κ := by
+    refine mem_function_of_mem_function_of_subset hf.mem_function ?_
+    intro Y hYκ
+    exact mem_power_iff.mpr (hκ.1.transitive _ hYκ)
+  refine ⟨cofinality κ, cofinality_isOrdinal hHasCof, f, ?_⟩
+  refine ⟨hfPow, ?_, hf.isCofinal.2⟩
+  intro Y hY
+  have hYκ : Y ∈ κ := hf.isCofinal.1 _ hY
+  have hYsubκ : Y ⊆ κ := hκ.1.transitive _ hYκ
+  refine ⟨cardLE_of_subset hYsubκ, ?_⟩
+  intro hκleY
+  exact hκ.2 Y hYκ ⟨cardLE_of_subset hYsubκ, hκleY⟩
+
+lemma coveringNumber_subset_cofinality_of_isCardinal_of_ω_subset [V ⊧ₘ* 𝗭𝗙] {κ : V}
+    (hκ : IsCardinal κ) (hωκ : (ω : V) ⊆ κ) :
+    coveringNumber κ ⊆ cofinality κ := by
+  have hHasCover : HasSmallCoveringFunction κ :=
+    hasSmallCoveringFunction_of_isCardinal_of_ω_subset (V := V) hκ hωκ
+  have hκlim : IsLimitOrdinal κ := isLimitOrdinal_of_isCardinal_of_ω_subset hκ hωκ
+  have hHasCof : HasCofinalFunction κ := hasCofinalFunction_of_isLimitOrdinal hκlim
+  rcases cofinality_hasFunction hHasCof with ⟨f, hf⟩
+  exact coveringNumber_least hHasCover (cofinality_isOrdinal hHasCof)
+    ⟨f, by
+      refine ⟨mem_function_of_mem_function_of_subset hf.mem_function ?_, ?_, hf.isCofinal.2⟩
+      · intro Y hYκ
+        exact mem_power_iff.mpr (hκ.1.transitive _ hYκ)
+      · intro Y hY
+        have hYκ : Y ∈ κ := hf.isCofinal.1 _ hY
+        have hYsubκ : Y ⊆ κ := hκ.1.transitive _ hYκ
+        refine ⟨cardLE_of_subset hYsubκ, ?_⟩
+        intro hκleY
+        exact hκ.2 Y hYκ ⟨cardLE_of_subset hYsubκ, hκleY⟩⟩
+
+private lemma initialSegment_memRelOn_subset_eq_inter {α X x : V} [IsOrdinal α]
+    (_hX : X ⊆ α) (hx : x ∈ X) :
+    initialSegment (IsOrdinal.memRelOn X) X x = X ∩ x := by
+  ext z
+  constructor
+  · intro hz
+    rcases mem_initialSegment_iff.mp hz with ⟨hzX, hzx⟩
+    exact mem_inter_iff.mpr ⟨hzX, (IsOrdinal.kpair_mem_memRelOn_iff.mp hzx).2.2⟩
+  · intro hz
+    rcases mem_inter_iff.mp hz with ⟨hzX, hzx⟩
+    refine mem_initialSegment_iff.mpr ?_
+    exact ⟨hzX, IsOrdinal.kpair_mem_memRelOn_iff.mpr ⟨hzX, hx, hzx⟩⟩
+
+private lemma wellOrderTypeValTotal_memRelOn_inter_mem [V ⊧ₘ* 𝗭𝗙] {α X x : V} [hα : IsOrdinal α]
+    (hX : X ⊆ α) (hx : x ∈ X) :
+    Ordinal.wellOrderTypeValTotal (IsOrdinal.memRelOn (X ∩ x)) (X ∩ x) ∈
+      Ordinal.wellOrderTypeValTotal (IsOrdinal.memRelOn X) X := by
+  let hXwo : IsWellOrderOn (IsOrdinal.memRelOn X) X :=
+    IsOrdinal.wellOrderOn_memRelOn_subset (α := α) hX
+  have hxα : x ∈ α := hX _ hx
+  have hIxSub : X ∩ x ⊆ α := by
+    intro z hz
+    rcases mem_inter_iff.mp hz with ⟨-, hzx⟩
+    exact hα.toIsTransitive.transitive _ hxα _ hzx
+  let hIxwo : IsWellOrderOn (IsOrdinal.memRelOn (X ∩ x)) (X ∩ x) :=
+    IsOrdinal.wellOrderOn_memRelOn_subset (α := α) hIxSub
+  let β : V := Ordinal.wellOrderTypeVal (IsOrdinal.memRelOn X) X hXwo
+  have hβord : IsOrdinal β := by
+    simpa [β] using (Ordinal.wellOrderTypeVal_spec (IsOrdinal.memRelOn X) X hXwo).1
+  rcases Ordinal.wellOrderType_isOrderIso (S := IsOrdinal.memRelOn X) (Y := X) (hSwo := hXwo) with
+    ⟨f, hf⟩
+  have hxRange : x ∈ range f := by
+    simpa [hf.range_eq] using hx
+  rcases mem_range_iff.mp hxRange with ⟨b, hbfx⟩
+  have hbβ : b ∈ β := (mem_of_mem_functions hf.mem_function hbfx).1
+  have hRes :
+      IsOrderIso (IsOrdinal.memRelOn β) (initialSegment (IsOrdinal.memRelOn β) β b)
+        (IsOrdinal.memRelOn X) (initialSegment (IsOrdinal.memRelOn X) X x)
+        (f ↾ (initialSegment (IsOrdinal.memRelOn β) β b)) :=
+    hf.restrict_initialSegment hbβ hbfx
+  have hRes'' :
+      IsOrderIso (IsOrdinal.memRelOn β) b
+        (IsOrdinal.memRelOn X) (X ∩ x)
+        (f ↾ (initialSegment (IsOrdinal.memRelOn β) β b)) := by
+    simpa [IsOrdinal.initialSegment_memRelOn_eq (α := β) hbβ,
+      initialSegment_memRelOn_subset_eq_inter (α := α) hX hx] using hRes
+  have hRes' :
+      IsOrderIso (IsOrdinal.memRelOn b) b
+        (IsOrdinal.memRelOn (X ∩ x)) (X ∩ x)
+        (f ↾ (initialSegment (IsOrdinal.memRelOn β) β b)) := by
+    have hResFun : (f ↾ (initialSegment (IsOrdinal.memRelOn β) β b)) ∈ (X ∩ x) ^ b := hRes''.mem_function
+    refine ⟨hResFun, hRes''.injective, hRes''.range_eq, ?_⟩
+    intro u hu v hv
+    have huvDom :
+        ⟨u, v⟩ₖ ∈ IsOrdinal.memRelOn β ↔ ⟨u, v⟩ₖ ∈ IsOrdinal.memRelOn b := by
+      constructor
+      · intro huvβ
+        exact IsOrdinal.kpair_mem_memRelOn_iff.mpr
+          ⟨hu, hv, (IsOrdinal.kpair_mem_memRelOn_iff.mp huvβ).2.2⟩
+      · intro huvb
+        have huβ : u ∈ β := hβord.toIsTransitive.transitive _ hbβ _ hu
+        have hvβ : v ∈ β := hβord.toIsTransitive.transitive _ hbβ _ hv
+        exact IsOrdinal.kpair_mem_memRelOn_iff.mpr
+          ⟨huβ, hvβ, (IsOrdinal.kpair_mem_memRelOn_iff.mp huvb).2.2⟩
+    have huImg : (f ↾ (initialSegment (IsOrdinal.memRelOn β) β b)) ‘ u ∈ X ∩ x :=
+      range_subset_of_mem_function hResFun _ (value_mem_range hResFun hu)
+    have hvImg : (f ↾ (initialSegment (IsOrdinal.memRelOn β) β b)) ‘ v ∈ X ∩ x :=
+      range_subset_of_mem_function hResFun _ (value_mem_range hResFun hv)
+    have huvCod :
+        ⟨(f ↾ (initialSegment (IsOrdinal.memRelOn β) β b)) ‘ u,
+          (f ↾ (initialSegment (IsOrdinal.memRelOn β) β b)) ‘ v⟩ₖ ∈ IsOrdinal.memRelOn X ↔
+        ⟨(f ↾ (initialSegment (IsOrdinal.memRelOn β) β b)) ‘ u,
+          (f ↾ (initialSegment (IsOrdinal.memRelOn β) β b)) ‘ v⟩ₖ ∈ IsOrdinal.memRelOn (X ∩ x) := by
+      constructor
+      · intro h
+        exact IsOrdinal.kpair_mem_memRelOn_iff.mpr
+          ⟨huImg, hvImg, (IsOrdinal.kpair_mem_memRelOn_iff.mp h).2.2⟩
+      · intro h
+        exact IsOrdinal.kpair_mem_memRelOn_iff.mpr
+          ⟨(mem_inter_iff.mp huImg).1, (mem_inter_iff.mp hvImg).1,
+            (IsOrdinal.kpair_mem_memRelOn_iff.mp h).2.2⟩
+    constructor
+    · intro huvb
+      have huvβ : ⟨u, v⟩ₖ ∈ IsOrdinal.memRelOn β := huvDom.2 huvb
+      have huvX :
+          ⟨(f ↾ (initialSegment (IsOrdinal.memRelOn β) β b)) ‘ u,
+            (f ↾ (initialSegment (IsOrdinal.memRelOn β) β b)) ‘ v⟩ₖ ∈ IsOrdinal.memRelOn X :=
+        (hRes''.rel_iff hu hv).1 huvβ
+      exact huvCod.1 huvX
+    · intro huvIx
+      have huvX :
+          ⟨(f ↾ (initialSegment (IsOrdinal.memRelOn β) β b)) ‘ u,
+            (f ↾ (initialSegment (IsOrdinal.memRelOn β) β b)) ‘ v⟩ₖ ∈ IsOrdinal.memRelOn X :=
+        huvCod.2 huvIx
+      have huvβ : ⟨u, v⟩ₖ ∈ IsOrdinal.memRelOn β := (hRes''.rel_iff hu hv).2 huvX
+      exact huvDom.1 huvβ
+  have hbEq :
+      b = Ordinal.wellOrderTypeVal (IsOrdinal.memRelOn (X ∩ x)) (X ∩ x) hIxwo := by
+    exact (Ordinal.wellOrderTypeVal_eq_iff_isOrderIso (S := IsOrdinal.memRelOn (X ∩ x))
+      (Y := X ∩ x) (α := b) (hSwo := hIxwo)).2 ⟨hβord.of_mem hbβ, ⟨_, hRes'⟩⟩
+  have hMem :
+      Ordinal.wellOrderTypeVal (IsOrdinal.memRelOn (X ∩ x)) (X ∩ x) hIxwo ∈ β := by
+    simpa [hbEq] using hbβ
+  simpa [β, Ordinal.wellOrderTypeValTotal_of_wellOrderOn hXwo,
+    Ordinal.wellOrderTypeValTotal_of_wellOrderOn hIxwo] using hMem
+
+private lemma wellOrderTypeValTotal_memRelOn_inter_strictIncreasing [V ⊧ₘ* 𝗭𝗙]
+    {α X x y : V} [hα : IsOrdinal α]
+    (hX : X ⊆ α) (hx : x ∈ X) (hy : y ∈ X) (hxy : x ∈ y) :
+    Ordinal.wellOrderTypeValTotal (IsOrdinal.memRelOn (X ∩ x)) (X ∩ x) ∈
+      Ordinal.wellOrderTypeValTotal (IsOrdinal.memRelOn (X ∩ y)) (X ∩ y) := by
+  have hyα : y ∈ α := hX _ hy
+  have hIySub : X ∩ y ⊆ α := by
+    intro z hz
+    rcases mem_inter_iff.mp hz with ⟨-, hzy⟩
+    exact hα.toIsTransitive.transitive _ hyα _ hzy
+  have hxIy : x ∈ X ∩ y := mem_inter_iff.mpr ⟨hx, hxy⟩
+  have hEq : (X ∩ y) ∩ x = X ∩ x := by
+    ext z
+    constructor
+    · intro hz
+      rcases mem_inter_iff.mp hz with ⟨hzIy, hzx⟩
+      exact mem_inter_iff.mpr ⟨(mem_inter_iff.mp hzIy).1, hzx⟩
+    · intro hz
+      rcases mem_inter_iff.mp hz with ⟨hzX, hzx⟩
+      have hzy : z ∈ y := hα.of_mem hyα |> fun hyord => hyord.toIsTransitive.transitive _ hxy _ hzx
+      exact mem_inter_iff.mpr ⟨mem_inter_iff.mpr ⟨hzX, hzy⟩, hzx⟩
+  simpa [hEq] using
+    wellOrderTypeValTotal_memRelOn_inter_mem (V := V) (α := α) (X := X ∩ y) hIySub hxIy
+
+private lemma mem_ω_or_ω_subset_of_isOrdinal {α : V} [IsOrdinal α] :
+    α ∈ (ω : V) ∨ (ω : V) ⊆ α := by
+  rcases IsOrdinal.subset_or_supset (α := α) (β := (ω : V)) with (hαω | hωα)
+  · rcases (IsOrdinal.subset_iff (α := α) (β := (ω : V))).1 hαω with (hEq | hMem)
+    · exact Or.inr (hEq.symm ▸ subset_refl (ω : V))
+    · exact Or.inl hMem
+  · exact Or.inr hωα
+
+private lemma mem_ω_of_subset_ω_of_ne_ω {α : V} [IsOrdinal α]
+    (hαω : α ⊆ (ω : V)) (hαne : α ≠ (ω : V)) :
+    α ∈ (ω : V) := by
+  rcases (IsOrdinal.subset_iff (α := α) (β := (ω : V))).1 hαω with (hEq | hMem)
+  · exact False.elim (hαne hEq)
+  · exact hMem
 
 noncomputable def cardAdd (X Y : V) : V :=
   card (orderSumCarrier X Y)
@@ -2072,6 +3447,516 @@ lemma cardMul_eq_ordinalMax_of_isCardinal_of_ω_subset_of_ne_zero
         cardMul_eq_self_of_isCardinal_of_ω_subset_of_subset_of_ne_zero
           (V := V) hκ hμ hωκ hμκ hμ0
       _ = ordinalMax κ μ := (union_eq_iff_right.mpr hμκ).symm
+
+lemma cardMul_mem_of_isCardinal_of_mem_of_ne_zero [V ⊧ₘ* 𝗭𝗙]
+    {κ α lam : V}
+    (hκ : IsCardinal κ) (hωκ : (ω : V) ⊆ κ)
+    (hα : IsCardinal α) (hακ : α ∈ κ)
+    (hlamκ : lam ∈ κ) (hα0 : α ≠ (0 : V)) (hlam0 : lam ≠ (0 : V)) :
+    cardMul α lam ∈ κ := by
+  have hlamord : IsOrdinal lam := hκ.1.of_mem hlamκ
+  let μ : V := card lam
+  have hμspec : IsCardinal μ ∧ μ ≋ lam := by
+    simpa [μ] using
+      (card_spec (exists_isCardinal_cardEQ_of_isOrdinal (V := V) hlamord))
+  have hμcard : IsCardinal μ := hμspec.1
+  have hμκ : μ ∈ κ := by
+    simpa [μ] using card_mem_of_mem_of_isCardinal (V := V) hκ hlamord hlamκ
+  have hEqMul : cardMul α lam = cardMul α μ := by
+    have hLeft := cardMul_spec_of_isOrdinal (V := V) hα.1 hlamord
+    have hRight := cardMul_spec_of_isCardinal (V := V) hα hμcard
+    have hlamμ : lam ≋ μ := CardEQ.symm hμspec.2
+    have hProdEq : (α ×ˢ lam) ≋ (α ×ˢ μ) :=
+      CardEQ.prod (V := V) (CardEQ.refl α) hlamμ
+    have hMulEq : cardMul α lam ≋ cardMul α μ :=
+      CardEQ.trans hLeft.2 <| CardEQ.trans hProdEq (CardEQ.symm hRight.2)
+    exact eq_of_isCardinal_of_cardEQ hLeft.1 hRight.1 hMulEq
+  have hμ0 : μ ≠ (0 : V) := by
+    intro hμeq0
+    rcases ne_empty_iff_isNonempty.mp hlam0 with ⟨x, hxlam⟩
+    rcases CardEQ.exists_bijective (V := V) hμspec.2 with ⟨e, he⟩
+    have hxRange : x ∈ range e := by
+      simpa [he.range_eq] using hxlam
+    rcases mem_range_iff.mp hxRange with ⟨u, hue⟩
+    have huμ : u ∈ μ := (mem_of_mem_functions he.mem_function hue).1
+    have hu0 : u ∈ (0 : V) := by simpa [hμeq0] using huμ
+    exact (not_mem_empty hu0).elim
+  letI : IsOrdinal α := hα.1
+  letI : IsOrdinal μ := hμcard.1
+  rcases IsOrdinal.subset_or_supset (α := α) (β := μ) with (hαμ | hμα)
+  · rcases mem_ω_or_ω_subset_of_isOrdinal (α := μ) with (hμω | hωμ)
+    · have hμsubω : μ ⊆ (ω : V) := IsOrdinal.ω.transitive _ hμω
+      have hαω : α ∈ (ω : V) := by
+        have hαsubω : α ⊆ (ω : V) := subset_trans hαμ hμsubω
+        have hαneω : α ≠ (ω : V) := by
+          intro hEq
+          have hωsubμ : (ω : V) ⊆ μ := by simpa [hEq] using hαμ
+          have hμsubω : μ ⊆ (ω : V) := IsOrdinal.ω.transitive _ hμω
+          have hωeqμ : (ω : V) = μ := subset_antisymm hωsubμ hμsubω
+          have : (ω : V) ∈ (ω : V) := by simp [hωeqμ] at hμω
+          exact False.elim ((mem_irrefl (ω : V)) this)
+        exact mem_ω_of_subset_ω_of_ne_ω hαsubω hαneω
+      have hMulω : cardMul α μ ∈ (ω : V) := by
+        simpa [cardMul_eq_mulValue_of_mem_ω (V := V) hαω hμω] using
+          (Ordinal.mulValue_mem_ω (α := ⟨α, hα.1⟩) (β := ⟨μ, hμcard.1⟩) hαω hμω)
+      simpa [hEqMul] using hωκ _ hMulω
+    · have hMulEq : cardMul α μ = μ := by
+        calc
+          cardMul α μ = cardMul μ α := cardMul_comm_of_isCardinal (V := V) hα hμcard
+          _ = μ := cardMul_eq_self_of_isCardinal_of_ω_subset_of_subset_of_ne_zero
+            (V := V) hμcard hα hωμ hαμ hα0
+      simpa [hEqMul, hMulEq] using hμκ
+  · rcases mem_ω_or_ω_subset_of_isOrdinal (α := α) with (hαω | hωα)
+    · have hαsubω : α ⊆ (ω : V) := IsOrdinal.ω.transitive _ hαω
+      have hμω : μ ∈ (ω : V) := by
+        have hμsubω : μ ⊆ (ω : V) := subset_trans hμα hαsubω
+        have hμneω : μ ≠ (ω : V) := by
+          intro hEq
+          have hωsubα : (ω : V) ⊆ α := by simpa [hEq] using hμα
+          have hαsubω : α ⊆ (ω : V) := IsOrdinal.ω.transitive _ hαω
+          have hωeqα : (ω : V) = α := subset_antisymm hωsubα hαsubω
+          have : (ω : V) ∈ (ω : V) := by simp [hωeqα] at hαω
+          exact False.elim ((mem_irrefl (ω : V)) this)
+        exact mem_ω_of_subset_ω_of_ne_ω hμsubω hμneω
+      have hMulω : cardMul α μ ∈ (ω : V) := by
+        simpa [cardMul_eq_mulValue_of_mem_ω (V := V) hαω hμω] using
+          (Ordinal.mulValue_mem_ω (α := ⟨α, hα.1⟩) (β := ⟨μ, hμcard.1⟩) hαω hμω)
+      simpa [hEqMul] using hωκ _ hMulω
+    · have hMulEq : cardMul α μ = α := by
+        exact cardMul_eq_self_of_isCardinal_of_ω_subset_of_subset_of_ne_zero
+          (V := V) hα hμcard hωα hμα hμ0
+      simpa [hEqMul, hMulEq] using hακ
+
+lemma coveringNumber_eq_cofinality_of_isCardinal_of_ω_subset [V ⊧ₘ* 𝗭𝗙] {κ : V}
+    (hκ : IsCardinal κ) (hωκ : (ω : V) ⊆ κ) :
+    coveringNumber κ = cofinality κ := by
+  let α : V := coveringNumber κ
+  have hκlim : IsLimitOrdinal κ := isLimitOrdinal_of_isCardinal_of_ω_subset hκ hωκ
+  have hHasCof : HasCofinalFunction κ := hasCofinalFunction_of_isLimitOrdinal hκlim
+  have hHasCover : HasSmallCoveringFunction κ :=
+    hasSmallCoveringFunction_of_isCardinal_of_ω_subset (V := V) hκ hωκ
+  have hαcard : IsCardinal α := by
+    simpa [α] using coveringNumber_isCardinal (V := V) κ
+  have hαsubcof : α ⊆ cofinality κ := by
+    simpa [α] using
+      coveringNumber_subset_cofinality_of_isCardinal_of_ω_subset (V := V) hκ hωκ
+  have hcofsubκ : cofinality κ ⊆ κ := cofinality_subset_of_isLimitOrdinal hκlim
+  have hαsubκ : α ⊆ κ := subset_trans hαsubcof hcofsubκ
+  letI : IsOrdinal κ := hκ.1
+  letI : IsOrdinal α := hαcard.1
+  letI : IsOrdinal (cofinality κ) := cofinality_isOrdinal hHasCof
+  rcases (IsOrdinal.subset_iff (α := α) (β := κ)).1 hαsubκ with (hEq | hακ)
+  · have hRight : cofinality κ ⊆ α := by simpa [hEq] using hcofsubκ
+    exact subset_antisymm hαsubcof hRight
+  · rcases coveringNumber_hasFunction hHasCover with ⟨f, hf⟩
+    have hfFun : f ∈ ℘ κ ^ α := hf.mem_function
+    have hα0 : α ≠ (0 : V) := by
+      intro hαeq0
+      have hf0 : f ∈ ℘ κ ^ (0 : V) := by simpa [hαeq0] using hfFun
+      have hdom : domain f = ∅ := by simpa using domain_eq_of_mem_function hf0
+      have hrange : range f = ∅ := by
+        apply subset_empty_iff_eq_empty.mp
+        intro Y hY
+        rcases mem_range_iff.mp hY with ⟨x, hx⟩
+        have hxDom : x ∈ domain f := mem_domain_of_kpair_mem hx
+        simp [hdom] at hxDom
+      have hκ0 : κ = (0 : V) := by
+        simpa [hrange, zero_def] using hf.2.2.symm
+      have : (0 : V) ∈ (0 : V) := hκ0 ▸ hωκ 0 zero_mem_ω
+      exact mem_irrefl 0 this
+    let T : V → V → Prop := fun ξ η ↦
+      ξ ∈ α ∧ η = Ordinal.wellOrderTypeValTotal (IsOrdinal.memRelOn (f ‘ ξ)) (f ‘ ξ)
+    have hT : ℒₛₑₜ-relation[V] T := by
+      letI : ℒₛₑₜ-function₂[V] value := value.definable
+      letI : ℒₛₑₜ-function₁[V] IsOrdinal.memRelOn := IsOrdinal.memRelOn.definable
+      letI : ℒₛₑₜ-function₂[V] Ordinal.wellOrderTypeValTotal := Ordinal.wellOrderTypeValTotal.definable (V := V)
+      change ℒₛₑₜ-relation[V] (fun ξ η ↦
+        ξ ∈ α ∧ η = Ordinal.wellOrderTypeValTotal (IsOrdinal.memRelOn (f ‘ ξ)) (f ‘ ξ))
+      definability
+    have hTfun : ∀ ξ : V, ξ ∈ α → ∃! η : V, T ξ η := by
+      intro ξ hξα
+      refine ⟨Ordinal.wellOrderTypeValTotal (IsOrdinal.memRelOn (f ‘ ξ)) (f ‘ ξ), ?_, ?_⟩
+      · exact ⟨hξα, rfl⟩
+      · intro η hη
+        exact hη.2
+    rcases replacement_graph_exists_on_of_definableRelation (V := V) α T hT hTfun with
+      ⟨t, htFunc, htDom, htGraph⟩
+    letI : IsFunction t := htFunc
+    have htRangeSub : range t ⊆ κ := by
+      intro η hηRange
+      rcases mem_range_iff.mp hηRange with ⟨ξ, hξη⟩
+      have hξα : ξ ∈ α := by
+        simpa [htDom] using mem_domain_of_kpair_mem hξη
+      have hηEq :
+          η = Ordinal.wellOrderTypeValTotal (IsOrdinal.memRelOn (f ‘ ξ)) (f ‘ ξ) :=
+        (htGraph ξ hξα η).1 hξη |>.2
+      have hYpow : f ‘ ξ ∈ ℘ κ := by
+        exact range_subset_of_mem_function hfFun _ (value_mem_range hfFun hξα)
+      have hYsubκ : f ‘ ξ ⊆ κ := mem_power_iff.mp hYpow
+      let hYwo : IsWellOrderOn (IsOrdinal.memRelOn (f ‘ ξ)) (f ‘ ξ) :=
+        IsOrdinal.wellOrderOn_memRelOn_subset (α := κ) hYsubκ
+      let τ : V := Ordinal.wellOrderTypeVal (IsOrdinal.memRelOn (f ‘ ξ)) (f ‘ ξ) hYwo
+      have hτsubκ : τ ⊆ κ := by
+        simpa [τ] using wellOrderTypeVal_memRelOn_subset_subset (α := κ) (X := f ‘ ξ) hYsubκ
+      have hτY : τ ≋ f ‘ ξ := by
+        rcases Ordinal.wellOrderType_isOrderIso
+            (S := IsOrdinal.memRelOn (f ‘ ξ)) (Y := f ‘ ξ) (hSwo := hYwo) with ⟨e, he⟩
+        exact CardEQ.of_bijective (IsOrderIso.bijective he)
+      have hτne : τ ≠ κ := by
+        intro hτeq
+        exact (hf.2.1 _ (value_mem_range hfFun hξα)).2 (hτeq.symm ▸ hτY.le)
+      have hτκ : τ ∈ κ := by
+        letI : IsOrdinal τ := by
+          simpa [τ] using
+            (Ordinal.wellOrderTypeVal_spec (IsOrdinal.memRelOn (f ‘ ξ)) (f ‘ ξ) hYwo).1
+        rcases (IsOrdinal.subset_iff (α := τ) (β := κ)).1 hτsubκ with (hEqτ | hMemτ)
+        · exact False.elim (hτne hEqτ)
+        · exact hMemτ
+      simpa [hηEq, Ordinal.wellOrderTypeValTotal_of_wellOrderOn hYwo] using hτκ
+    have htMem : t ∈ κ ^ α := by
+      apply mem_function.intro
+      · intro p hp
+        rcases show ∃ ξ ∈ domain t, ∃ η ∈ range t, p = ⟨ξ, η⟩ₖ from by
+            simpa [mem_prod_iff] using subset_prod_of_mem_function (IsFunction.mem_function t) _ hp with
+          ⟨ξ, hξdom, η, hηRange, rfl⟩
+        have hξα : ξ ∈ α := by simpa [htDom] using hξdom
+        have hηκ : η ∈ κ := htRangeSub _ hηRange
+        exact mem_prod_iff.mpr ⟨ξ, hξα, η, hηκ, rfl⟩
+      · intro ξ hξα
+        rcases hTfun ξ hξα with ⟨η, hη, hηuniq⟩
+        refine ⟨η, (htGraph ξ hξα η).2 hη, ?_⟩
+        intro η' hξη'
+        exact hηuniq _ ((htGraph ξ hξα η').1 hξη')
+    have htCof : IsCofinal (range t) κ := by
+      refine ⟨range_subset_of_mem_function htMem, ?_⟩
+      by_contra hne
+      let lam : V := ⋃ˢ range t
+      have hlamsubκ : lam ⊆ κ := by
+        intro z hz
+        rcases mem_sUnion_iff.mp hz with ⟨η, hηRange, hzη⟩
+        have hηκ : η ∈ κ := htRangeSub _ hηRange
+        exact hκ.1.toIsTransitive.transitive _ hηκ _ hzη
+      have hlamκ : lam ∈ κ := by
+        letI : IsOrdinal lam := IsOrdinal.sUnion fun η hηRange ↦ hκ.1.of_mem (htRangeSub _ hηRange)
+        rcases (IsOrdinal.subset_iff (α := lam) (β := κ)).1 hlamsubκ with (hEqlam | hMemlam)
+        · exact False.elim (hne hEqlam)
+        · exact hMemlam
+      let S : V → V → Prop := fun x p ↦
+        ∃ ξ r : V,
+          p = ⟨ξ, r⟩ₖ ∧
+          ξ ∈ α ∧ x ∈ f ‘ ξ ∧
+          (∀ ν : V, ν ∈ α → ν ∈ ξ → x ∉ f ‘ ν) ∧
+          r = Ordinal.wellOrderTypeValTotal (IsOrdinal.memRelOn (f ‘ ξ ∩ x)) (f ‘ ξ ∩ x)
+      have hS : ℒₛₑₜ-relation[V] S := by
+        letI : ℒₛₑₜ-function₂[V] value := value.definable
+        letI : ℒₛₑₜ-function₂[V] inter := inter.definable
+        letI : ℒₛₑₜ-function₁[V] IsOrdinal.memRelOn := IsOrdinal.memRelOn.definable
+        letI : ℒₛₑₜ-function₂[V] Ordinal.wellOrderTypeValTotal := Ordinal.wellOrderTypeValTotal.definable (V := V)
+        change ℒₛₑₜ-relation[V] (fun x p ↦
+          ∃ ξ r : V,
+            p = ⟨ξ, r⟩ₖ ∧
+            ξ ∈ α ∧ x ∈ f ‘ ξ ∧
+            (∀ ν : V, ν ∈ α → ν ∈ ξ → x ∉ f ‘ ν) ∧
+            r = Ordinal.wellOrderTypeValTotal (IsOrdinal.memRelOn (f ‘ ξ ∩ x)) (f ‘ ξ ∩ x))
+        definability
+      have hSfun : ∀ x : V, x ∈ κ → ∃! p : V, S x p := by
+        intro x hxκ
+        have hxUnion : x ∈ ⋃ˢ range f := by simpa [hf.2.2] using hxκ
+        rcases mem_sUnion_iff.mp hxUnion with ⟨Y, hYRange, hxY⟩
+        rcases mem_range_iff.mp hYRange with ⟨ξ₀, hξ₀Y⟩
+        have hξ₀α : ξ₀ ∈ α := (mem_of_mem_functions hfFun hξ₀Y).1
+        let Q : V → Prop := fun ξ ↦ ξ ∈ α ∧ x ∈ f ‘ ξ
+        have hQ : ℒₛₑₜ-predicate[V] Q := by
+          letI : ℒₛₑₜ-function₂[V] value := value.definable
+          change ℒₛₑₜ-predicate[V] (fun ξ ↦ ξ ∈ α ∧ x ∈ f ‘ ξ)
+          definability
+        have hExQ : ∃ ξ : V, IsOrdinal ξ ∧ Q ξ := by
+          refine ⟨ξ₀, hαcard.1.of_mem hξ₀α, hξ₀α, ?_⟩
+          have hVal : f ‘ ξ₀ = Y := value_eq_of_kpair_mem hfFun hξ₀Y
+          simpa [hVal] using hxY
+        rcases exists_least_ordinal_of_exists (P := Q) hQ hExQ with ⟨ξ, hξord, hξQ, hξleast⟩
+        let r : V := Ordinal.wellOrderTypeValTotal (IsOrdinal.memRelOn (f ‘ ξ ∩ x)) (f ‘ ξ ∩ x)
+        refine ⟨⟨ξ, r⟩ₖ, ?_, ?_⟩
+        · refine ⟨ξ, r, rfl, hξQ.1, hξQ.2, ?_, rfl⟩
+          intro ν hνα hνξ hxν
+          have hξsubν : ξ ⊆ ν := hξleast ν (hαcard.1.of_mem hνα) ⟨hνα, hxν⟩
+          exact (mem_irrefl ν) (hξsubν _ hνξ)
+        · intro p hp
+          rcases hp with ⟨ξ', r', hpEq, hξ'α, hxξ', hleast', hr'Eq⟩
+          have hξsubξ' : ξ ⊆ ξ' := hξleast ξ' (hαcard.1.of_mem hξ'α) ⟨hξ'α, hxξ'⟩
+          letI : IsOrdinal ξ := hξord
+          letI : IsOrdinal ξ' := hαcard.1.of_mem hξ'α
+          have hξ'Eq : ξ' = ξ := by
+            rcases IsOrdinal.mem_trichotomy (α := ξ) (β := ξ') with (hξξ' | hEq | hξ'ξ)
+            · exact False.elim (hleast' ξ hξQ.1 hξξ' hξQ.2)
+            · exact hEq.symm
+            · exact False.elim ((mem_irrefl ξ') (hξsubξ' _ hξ'ξ))
+          subst hξ'Eq
+          simpa [r, hr'Eq] using hpEq
+      rcases replacement_graph_exists_on_of_definableRelation (V := V) κ S hS hSfun with
+        ⟨s, hsFunc, hsDom, hsGraph⟩
+      letI : IsFunction s := hsFunc
+      have hsRangeSub : range s ⊆ α ×ˢ lam := by
+        intro p hpRange
+        rcases mem_range_iff.mp hpRange with ⟨x, hxp⟩
+        have hxκ : x ∈ κ := by
+          simpa [hsDom] using mem_domain_of_kpair_mem hxp
+        rcases (hsGraph x hxκ p).1 hxp with ⟨ξ, r, hpEq, hξα, hxξ, -, hrEq⟩
+        subst hpEq
+        have hYpow : f ‘ ξ ∈ ℘ κ := by
+          exact range_subset_of_mem_function hfFun _ (value_mem_range hfFun hξα)
+        have hYsubκ : f ‘ ξ ⊆ κ := mem_power_iff.mp hYpow
+        have hrlam :
+            r ∈ lam := by
+          have hrτ :
+              r ∈ Ordinal.wellOrderTypeValTotal (IsOrdinal.memRelOn (f ‘ ξ)) (f ‘ ξ) := by
+            subst hrEq
+            exact wellOrderTypeValTotal_memRelOn_inter_mem (V := V) (α := κ) (X := f ‘ ξ) hYsubκ hxξ
+          have hτRange :
+              Ordinal.wellOrderTypeValTotal (IsOrdinal.memRelOn (f ‘ ξ)) (f ‘ ξ) ∈ range t := by
+            refine mem_range_iff.mpr ⟨ξ, ?_⟩
+            rcases exists_of_mem_function htMem ξ hξα with ⟨η, -, hξη⟩
+            have hηEq : η = Ordinal.wellOrderTypeValTotal (IsOrdinal.memRelOn (f ‘ ξ)) (f ‘ ξ) :=
+              (htGraph ξ hξα η).1 hξη |>.2
+            simpa [hηEq] using hξη
+          exact mem_sUnion_iff.mpr ⟨_, hτRange, hrτ⟩
+        simpa [mem_prod_iff] using And.intro hξα hrlam
+      have hsMem : s ∈ (α ×ˢ lam) ^ κ := by
+        apply mem_function.intro
+        · intro p hp
+          rcases show ∃ x ∈ domain s, ∃ q ∈ range s, p = ⟨x, q⟩ₖ from by
+              simpa [mem_prod_iff] using subset_prod_of_mem_function (IsFunction.mem_function s) _ hp with
+            ⟨x, hxdom, q, hqRange, rfl⟩
+          have hxκ : x ∈ κ := by simpa [hsDom] using hxdom
+          have hq : q ∈ α ×ˢ lam := hsRangeSub _ hqRange
+          exact mem_prod_iff.mpr ⟨x, hxκ, q, hq, rfl⟩
+        · intro x hxκ
+          rcases hSfun x hxκ with ⟨p, hp, hpuniq⟩
+          refine ⟨p, (hsGraph x hxκ p).2 hp, ?_⟩
+          intro p' hxp'
+          exact hpuniq _ ((hsGraph x hxκ p').1 hxp')
+      have hsInj : Injective s := by
+        intro x₁ x₂ p hx₁ hx₂
+        have hx₁κ : x₁ ∈ κ := by simpa [hsDom] using mem_domain_of_kpair_mem hx₁
+        have hx₂κ : x₂ ∈ κ := by simpa [hsDom] using mem_domain_of_kpair_mem hx₂
+        rcases (hsGraph x₁ hx₁κ p).1 hx₁ with ⟨ξ₁, r₁, hp₁, hξ₁α, hx₁ξ, -, hr₁⟩
+        rcases (hsGraph x₂ hx₂κ p).1 hx₂ with ⟨ξ₂, r₂, hp₂, hξ₂α, hx₂ξ, -, hr₂⟩
+        have hpairs : ⟨ξ₁, r₁⟩ₖ = ⟨ξ₂, r₂⟩ₖ := by
+          calc
+            ⟨ξ₁, r₁⟩ₖ = p := hp₁.symm
+            _ = ⟨ξ₂, r₂⟩ₖ := hp₂
+        rcases kpair_inj hpairs with ⟨hξEq, hrEq⟩
+        subst hξEq
+        by_cases hEqx : x₁ = x₂
+        · exact hEqx
+        · letI : IsOrdinal x₁ := hκ.1.of_mem hx₁κ
+          letI : IsOrdinal x₂ := hκ.1.of_mem hx₂κ
+          rcases IsOrdinal.mem_trichotomy (α := x₁) (β := x₂) with (hx₁₂ | hxeq | hx₂₁)
+          · exact False.elim <| by
+              have hYpow : f ‘ ξ₁ ∈ ℘ κ := by
+                exact range_subset_of_mem_function hfFun _ (value_mem_range hfFun hξ₁α)
+              have hYsubκ : f ‘ ξ₁ ⊆ κ := mem_power_iff.mp hYpow
+              have hlt : Ordinal.wellOrderTypeValTotal (IsOrdinal.memRelOn (f ‘ ξ₁ ∩ x₁)) (f ‘ ξ₁ ∩ x₁) ∈
+                  Ordinal.wellOrderTypeValTotal (IsOrdinal.memRelOn (f ‘ ξ₁ ∩ x₂)) (f ‘ ξ₁ ∩ x₂) := by
+                simpa [hr₁, hr₂, hrEq] using
+                  wellOrderTypeValTotal_memRelOn_inter_strictIncreasing
+                    (V := V) (α := κ) (X := f ‘ ξ₁) hYsubκ hx₁ξ hx₂ξ hx₁₂
+              have h12 : r₁ ∈ r₂ := by simpa [hr₁, hr₂] using hlt
+              have hself : r₁ ∈ r₁ := by simp [hrEq] at h12
+              exact ((mem_irrefl r₁) hself).elim
+          · exact (hEqx hxeq).elim
+          · exact False.elim <| by
+              have hYpow : f ‘ ξ₁ ∈ ℘ κ := by
+                exact range_subset_of_mem_function hfFun _ (value_mem_range hfFun hξ₁α)
+              have hYsubκ : f ‘ ξ₁ ⊆ κ := mem_power_iff.mp hYpow
+              have hlt : Ordinal.wellOrderTypeValTotal (IsOrdinal.memRelOn (f ‘ ξ₁ ∩ x₂)) (f ‘ ξ₁ ∩ x₂) ∈
+                  Ordinal.wellOrderTypeValTotal (IsOrdinal.memRelOn (f ‘ ξ₁ ∩ x₁)) (f ‘ ξ₁ ∩ x₁) := by
+                simpa [hr₁, hr₂, hrEq] using
+                  wellOrderTypeValTotal_memRelOn_inter_strictIncreasing
+                    (V := V) (α := κ) (X := f ‘ ξ₁) hYsubκ hx₂ξ hx₁ξ hx₂₁
+              have h21 : r₂ ∈ r₁ := by simpa [hr₁, hr₂] using hlt
+              have hself : r₁ ∈ r₁ := by simp [hrEq] at h21
+              exact ((mem_irrefl r₁) hself).elim
+      have hκleProd : κ ≤# α ×ˢ lam := ⟨s, hsMem, hsInj⟩
+      by_cases hlam0 : lam = (0 : V)
+      · have h0card : IsCardinal (0 : V) := isCardinal_of_mem_ω (V := V) (by simp)
+        have hle0 : κ ≤# (0 : V) := by
+          simpa [hlam0, prod_empty, zero_def] using hκleProd
+        have hκsub0 : κ ⊆ (0 : V) := (cardLE_iff_subset_of_isCardinal (V := V) hκ h0card).1 hle0
+        exact (mem_irrefl 0) (hκsub0 0 (hωκ 0 zero_mem_ω))
+      · have hMulκ : cardMul α lam ∈ κ := cardMul_mem_of_isCardinal_of_mem_of_ne_zero
+          (V := V) hκ hωκ hαcard hακ hlamκ hα0 hlam0
+        have hMulSubκ : cardMul α lam ⊆ κ := hκ.1.transitive _ hMulκ
+        have hMulEq : cardMul α lam ≋ (α ×ˢ lam) :=
+          cardMul_cardEQ_of_isOrdinal (V := V) hαcard.1 (hκ.1.of_mem hlamκ)
+        have hκleMul : κ ≤# cardMul α lam := hκleProd.trans hMulEq.ge
+        exact hκ.2 (cardMul α lam) hMulκ ⟨cardLE_of_subset hMulSubκ, hκleMul⟩
+    have hcofsubα : cofinality κ ⊆ α := by
+      rcases exists_isCofinalFunction_subset_of_mem_function_of_isCofinal
+          (hβ := hαcard.1) (hα := hκlim) htMem htCof with
+        ⟨γ, hγord, hγsubα, g, hg⟩
+      exact subset_trans (cofinality_least hHasCof hγord ⟨g, hg⟩) hγsubα
+    exact subset_antisymm hαsubcof hcofsubα
+
+private lemma exists_mem_function_not_mem_range_of_mem_function_of_subset_of_isCardinal_of_ω_subset
+    [V ⊧ₘ* 𝗭𝗙] {κ A F : V}
+    (hκ : IsCardinal κ) (hωκ : (ω : V) ⊆ κ) (hAκ : A ⊆ κ)
+    (hF : F ∈ (κ ^ cofinality κ) ^ A) :
+    ∃ g ∈ κ ^ cofinality κ, g ∉ range F := by
+  let δ : V := cofinality κ
+  have hκlim : IsLimitOrdinal κ := isLimitOrdinal_of_isCardinal_of_ω_subset hκ hωκ
+  have hHasCof : HasCofinalFunction κ := hasCofinalFunction_of_isLimitOrdinal hκlim
+  have hδord : IsOrdinal δ := by
+    simpa [δ] using cofinality_isOrdinal hHasCof
+  letI : IsOrdinal δ := hδord
+  rcases cofinality_hasFunction hHasCof with ⟨c, hc⟩
+  have hcFun : c ∈ κ ^ δ := by
+    simpa [δ] using hc.mem_function
+  let D : V → V → Prop := fun ξ y ↦
+    ξ ∈ δ ∧ y ∈ κ ∧
+      (∀ β : V, β ∈ A → β ∈ c ‘ ξ → (F ‘ β) ‘ ξ ≠ y) ∧
+      ∀ ν : V, IsOrdinal ν → ν ∈ κ →
+        (∀ β : V, β ∈ A → β ∈ c ‘ ξ → (F ‘ β) ‘ ξ ≠ ν) → y ⊆ ν
+  have hD : ℒₛₑₜ-relation[V] D := by
+    letI : ℒₛₑₜ-function₂[V] value := value.definable
+    change ℒₛₑₜ-relation[V] (fun ξ y ↦
+      ξ ∈ δ ∧ y ∈ κ ∧
+        (∀ β : V, β ∈ A → β ∈ c ‘ ξ → (F ‘ β) ‘ ξ ≠ y) ∧
+        ∀ ν : V, IsOrdinal ν → ν ∈ κ →
+          (∀ β : V, β ∈ A → β ∈ c ‘ ξ → (F ‘ β) ‘ ξ ≠ ν) → y ⊆ ν)
+    definability
+  have hDfun : ∀ ξ : V, ξ ∈ δ → ∃! y : V, D ξ y := by
+    intro ξ hξδ
+    have hcξκ : c ‘ ξ ∈ κ := hc.isCofinal.1 _ (value_mem_range hcFun hξδ)
+    have hcξord : IsOrdinal (c ‘ ξ) := hκ.1.of_mem hcξκ
+    let B : V := A ∩ c ‘ ξ
+    let H : V → V := fun β ↦ (F ‘ β) ‘ ξ
+    have hHdef : ℒₛₑₜ-function₁[V] H := by
+      letI : ℒₛₑₜ-function₂[V] value := value.definable
+      change ℒₛₑₜ-function₁[V] (fun β ↦ (F ‘ β) ‘ ξ)
+      definability
+    have hHmap : ∀ β ∈ B, H β ∈ κ := by
+      intro β hβB
+      have hβA : β ∈ A := (mem_inter_iff.mp hβB).1
+      have hFβ : F ‘ β ∈ κ ^ δ :=
+        range_subset_of_mem_function hF _ (value_mem_range hF hβA)
+      exact range_subset_of_mem_function hFβ _ (value_mem_range hFβ hξδ)
+    rcases graph_exists_mem_function_of_definableFunction B κ H hHdef hHmap with
+      ⟨e, heFun, heGraph⟩
+    have hRangeLe : range e ≤# c ‘ ξ :=
+      range_cardLE_of_mem_function_of_subset_of_isOrdinal hcξord
+        (fun β hβB ↦ (mem_inter_iff.mp hβB).2) heFun
+    have hRangeSubκ : range e ⊆ κ := range_subset_of_mem_function heFun
+    have hRangeNeκ : range e ≠ κ := by
+      intro hEq
+      have hκle : κ ≤# c ‘ ξ := by
+        simpa [hEq] using hRangeLe
+      have hcξle : c ‘ ξ ≤# κ := cardLE_of_subset (hκ.1.transitive _ hcξκ)
+      exact (hκ.2 (c ‘ ξ) hcξκ ⟨hcξle, hκle⟩).elim
+    let Q : V → Prop := fun y ↦
+      y ∈ κ ∧ ∀ β : V, β ∈ A → β ∈ c ‘ ξ → (F ‘ β) ‘ ξ ≠ y
+    have hQ : ℒₛₑₜ-predicate[V] Q := by
+      letI : ℒₛₑₜ-function₂[V] value := value.definable
+      change ℒₛₑₜ-predicate[V] (fun y ↦
+        y ∈ κ ∧ ∀ β : V, β ∈ A → β ∈ c ‘ ξ → (F ‘ β) ‘ ξ ≠ y)
+      definability
+    have hExQ : ∃ y : V, IsOrdinal y ∧ Q y := by
+      have hMiss : ∃ y, y ∈ κ ∧ y ∉ range e := by
+        by_contra hNo
+        apply hRangeNeκ
+        apply subset_antisymm hRangeSubκ
+        intro y hyκ
+        by_contra hyNotRange
+        exact hNo ⟨y, hyκ, hyNotRange⟩
+      rcases hMiss with ⟨y, hyκ, hyNot⟩
+      refine ⟨y, hκ.1.of_mem hyκ, hyκ, ?_⟩
+      intro β hβA hβcξ hEq
+      have hβB : β ∈ B := mem_inter_iff.mpr ⟨hβA, hβcξ⟩
+      have hβy : ⟨β, y⟩ₖ ∈ e := by
+        exact (heGraph β hβB y).2 (by simpa [H] using hEq.symm)
+      exact hyNot (mem_range_iff.mpr ⟨β, hβy⟩)
+    rcases exists_least_ordinal_of_exists (P := Q) hQ hExQ with
+      ⟨y, hyord, hyQ, hyleast⟩
+    refine ⟨y, ⟨hξδ, hyQ.1, hyQ.2, ?_⟩, ?_⟩
+    · intro ν hνord hνκ hνQ
+      exact hyleast ν hνord ⟨hνκ, hνQ⟩
+    · intro y' hy'
+      rcases hy' with ⟨-, hy'κ, hy'Q, hy'least⟩
+      exact subset_antisymm
+        (hy'least y hyord hyQ.1 hyQ.2)
+        (hyleast y' (hκ.1.of_mem hy'κ) ⟨hy'κ, hy'Q⟩)
+  rcases replacement_graph_exists_on_of_definableRelation (X := δ) D hD hDfun with
+    ⟨g, hgFunc, hgDom, hgGraph⟩
+  letI : IsFunction g := hgFunc
+  have hgRangeSub : range g ⊆ κ := by
+    intro y hyRange
+    rcases mem_range_iff.mp hyRange with ⟨ξ, hξy⟩
+    have hξδ : ξ ∈ δ := by
+      simpa [hgDom] using mem_domain_of_kpair_mem hξy
+    exact ((hgGraph ξ hξδ y).1 hξy).2.1
+  have hgFun : g ∈ κ ^ δ := by
+    apply mem_function.intro
+    · intro p hp
+      rcases show ∃ ξ ∈ domain g, ∃ y ∈ range g, p = ⟨ξ, y⟩ₖ from by
+          simpa [mem_prod_iff] using subset_prod_of_mem_function (IsFunction.mem_function g) _ hp with
+        ⟨ξ, hξDom, y, hyRange, rfl⟩
+      have hξδ : ξ ∈ δ := by simpa [hgDom] using hξDom
+      have hyκ : y ∈ κ := hgRangeSub _ hyRange
+      exact mem_prod_iff.mpr ⟨ξ, hξδ, y, hyκ, rfl⟩
+    · intro ξ hξδ
+      rcases hDfun ξ hξδ with ⟨y, hy, hyuniq⟩
+      refine ⟨y, (hgGraph ξ hξδ y).2 hy, ?_⟩
+      intro y' hξy'
+      exact hyuniq _ ((hgGraph ξ hξδ y').1 hξy')
+  refine ⟨g, by simpa [δ] using hgFun, ?_⟩
+  intro hgRange
+  rcases mem_range_iff.mp hgRange with ⟨β, hβg⟩
+  have hβA : β ∈ A := (mem_of_mem_functions hF hβg).1
+  have hβκ : β ∈ κ := hAκ _ hβA
+  have hβUnion : β ∈ ⋃ˢ range c := by
+    rw [hc.isCofinal.2]
+    exact hβκ
+  rcases mem_sUnion_iff.mp hβUnion with ⟨u, huRange, hβu⟩
+  rcases mem_range_iff.mp huRange with ⟨ξ, hξu⟩
+  have hξδ : ξ ∈ δ := (mem_of_mem_functions hcFun hξu).1
+  have huEq : c ‘ ξ = u := value_eq_of_kpair_mem hcFun hξu
+  have hβcξ : β ∈ c ‘ ξ := by simpa [huEq] using hβu
+  have hξDom : ξ ∈ domain g := by
+    simpa [domain_eq_of_mem_function hgFun] using hξδ
+  have hξpair : ⟨ξ, g ‘ ξ⟩ₖ ∈ g :=
+    (IsFunction.value_eq_iff_kpair_mem (f := g) (x := ξ) (y := g ‘ ξ) hξDom).mp rfl
+  rcases (hgGraph ξ hξδ (g ‘ ξ)).1 hξpair with ⟨-, -, hAvoid, -⟩
+  have hFβg : F ‘ β = g := value_eq_of_kpair_mem hF hβg
+  have hValEq : (F ‘ β) ‘ ξ = g ‘ ξ := by simp [hFβg]
+  exact hAvoid β hβA hβcξ hValEq
+
+lemma not_cardLE_power_cofinality_of_isCardinal_of_ω_subset [V ⊧ₘ* 𝗭𝗙] {κ : V}
+    (hκ : IsCardinal κ) (hωκ : (ω : V) ⊆ κ) :
+    ¬ κ ^ cofinality κ ≤# κ := by
+  intro hPow
+  rcases hPow with ⟨e, heFun, heInj⟩
+  have hInvFun : inverse e ∈ (κ ^ cofinality κ) ^ range e :=
+    inverse_mem_function_of_mem_function_of_injective heFun heInj
+  rcases exists_mem_function_not_mem_range_of_mem_function_of_subset_of_isCardinal_of_ω_subset
+      (hκ := hκ) (hωκ := hωκ) (hAκ := range_subset_of_mem_function heFun) hInvFun with
+    ⟨g, hgFun, hgNot⟩
+  have hgRange : g ∈ range (inverse e) := by
+    simpa [range_inverse e, domain_eq_of_mem_function heFun] using hgFun
+  exact hgNot hgRange
+
+lemma cardLT_power_cofinality_of_isCardinal_of_ω_subset [V ⊧ₘ* 𝗭𝗙] {κ : V}
+    (hκ : IsCardinal κ) (hωκ : (ω : V) ⊆ κ) :
+    κ <# κ ^ cofinality κ := by
+  let δ : V := cofinality κ
+  have hκlim : IsLimitOrdinal κ := isLimitOrdinal_of_isCardinal_of_ω_subset hκ hωκ
+  have hδlim : IsLimitOrdinal δ := by
+    simpa [δ] using cofinality_isLimitOrdinal_of_isLimitOrdinal hκlim
+  have hδnonempty : IsNonempty δ := by
+    exact ne_empty_iff_isNonempty.mp (by simpa [δ, zero_def] using hδlim.2.1)
+  letI : IsNonempty δ := hδnonempty
+  refine ⟨?_, ?_⟩
+  · simpa [δ] using (cardLE_power_of_nonempty_domain (V := V) (X := δ) (Y := κ))
+  · simpa [δ] using not_cardLE_power_cofinality_of_isCardinal_of_ω_subset (V := V) hκ hωκ
 
 lemma hartogs_least_cardinal_above_of_isCardinal [V ⊧ₘ* 𝗭𝗙] {κ : V}
     (hκ : IsCardinal κ) :
